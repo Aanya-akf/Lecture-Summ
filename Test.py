@@ -705,7 +705,7 @@ if st.session_state.screen == "login":
         .login-panel-footer { margin-top: auto; color: var(--p-muted) !important; font-size: 0.82rem; }
 
         /* Right column: password label row */
-        .field-row { display: flex; justify-content: space-between; align-items: baseline; margin: 4px 0 10px; padding-bottom: 2px; }
+        .field-row { display: flex; justify-content: space-between; align-items: baseline; margin: 4px 0 0; padding-bottom: 0; }
         .field-row .lbl { font-size: 0.875rem; color: var(--text); }
         .field-row a { font-size: 0.82rem; font-weight: 600; color: var(--accent) !important; text-decoration: none; }
         .field-row a:hover { text-decoration: underline; }
