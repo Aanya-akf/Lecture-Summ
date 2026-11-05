@@ -55,7 +55,7 @@ st.set_page_config(
 defaults = {
     "screen": "login",
     "auth_mode": "signin",  # "signin" or "signup"
-    "dark_mode": False,
+    "dark_mode": True,
     "username": "",
     "signed_in_at": "",
     "uploaded_file_name": "",
