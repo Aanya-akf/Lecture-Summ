@@ -18,7 +18,8 @@ st.set_page_config(
 # ------------------------------------------------------------
 defaults = {
     "screen": "login",
-    "dark_mode": True,
+    "auth_mode": "signin",  # "signin" or "signup"
+    "dark_mode": False,
     "username": "",
     "signed_in_at": "",
     "uploaded_file_name": "",
@@ -35,281 +36,530 @@ def go(screen: str) -> None:
 
 
 # ------------------------------------------------------------
-# Theme colors
+# Theme tokens (modern AI SaaS look: soft slate page, white cards,
+# violet accent, deep navy text). Dark mode keeps the same structure.
 # ------------------------------------------------------------
 if st.session_state.dark_mode:
-    BG = "#101225"
-    SIDEBAR = "#17192F"
-    CARD = "#20223A"
-    CARD_ALT = "#262844"
-    TEXT = "#F4F3FF"
-    MUTED = "#A8A9C5"
-    BORDER = "#383A56"
-    INPUT_BG = "#17192F"
-    SOFT = "#282544"
+    BG = "#0E1220"            # page
+    SURFACE = "#171C2F"       # cards
+    SURFACE_2 = "#1D2338"     # raised tiles / inputs
+    TEXT = "#EEF0FA"
+    MUTED = "#9AA3BF"
+    ACCENT = "#8B7CFF"
+    ACCENT_2 = "#6C5CE7"
+    BORDER = "rgba(139, 124, 255, 0.22)"
+    GLOW = "rgba(139, 124, 255, 0.28)"
+    CARD_SHADOW = "0 18px 50px rgba(0, 0, 0, 0.45)"
+    TILE_SHADOW = "0 6px 18px rgba(0, 0, 0, 0.30)"
+    TITLE_A, TITLE_B = "#FFFFFF", "#C9C2FF"
+    GOOD = "#5FD39A"
+    P = dict(
+        bg="linear-gradient(160deg, #141C33 0%, #2B2377 55%, #5443D6 100%)",
+        border="rgba(255, 255, 255, 0.10)", text="#DCDFF5", muted="#B8BCE0", sub="#C9CDEB",
+        ta="#FFFFFF", tb="#D9D2FF", ai="#B79CFF",
+        chip_bg="rgba(255, 255, 255, 0.08)", chip_border="rgba(255, 255, 255, 0.14)", chip_text="#FFFFFF",
+        logo_bg="rgba(255, 255, 255, 0.10)", logo_border="rgba(255, 255, 255, 0.25)",
+        ring="rgba(167, 139, 250, 0.18)", glow="rgba(167, 139, 250, 0.45)",
+        wave="#B79CFF", doc="#D9D2FF",
+    )
 else:
-    BG = "#F3F4FA"
-    SIDEBAR = "#FFFFFF"
-    CARD = "#FFFFFF"
-    CARD_ALT = "#F8F7FF"
-    TEXT = "#22213B"
-    MUTED = "#73748A"
-    BORDER = "#E2E3EF"
-    INPUT_BG = "#FFFFFF"
-    SOFT = "#F0EBFF"
+    BG = "#E9EEF5"
+    SURFACE = "#FFFFFF"
+    SURFACE_2 = "#F5F7FB"
+    TEXT = "#18243A"
+    MUTED = "#5F6B85"
+    ACCENT = "#6C5CE7"
+    ACCENT_2 = "#5443D6"
+    BORDER = "rgba(108, 92, 231, 0.20)"
+    GLOW = "rgba(108, 92, 231, 0.22)"
+    CARD_SHADOW = "0 18px 50px rgba(24, 36, 58, 0.10)"
+    TILE_SHADOW = "0 4px 14px rgba(24, 36, 58, 0.07)"
+    TITLE_A, TITLE_B = "#18243A", "#4B3FC4"
+    GOOD = "#1F9D68"
+    P = dict(
+        bg="linear-gradient(160deg, #F6F3FF 0%, #E3DCFF 55%, #CDC2FF 100%)",
+        border="rgba(108, 92, 231, 0.25)", text="#2A2F52", muted="#4F5680", sub="#4F5680",
+        ta="#18243A", tb="#4B3FC4", ai="#6C5CE7",
+        chip_bg="rgba(255, 255, 255, 0.75)", chip_border="rgba(108, 92, 231, 0.22)", chip_text="#18243A",
+        logo_bg="#FFFFFF", logo_border="rgba(108, 92, 231, 0.30)",
+        ring="rgba(108, 92, 231, 0.15)", glow="rgba(108, 92, 231, 0.35)",
+        wave="#6C5CE7", doc="#6C5CE7",
+    )
+
+theme_vars = f"""
+:root {{
+    color-scheme: {"dark" if st.session_state.dark_mode else "light"};
+    --bg: {BG};
+    --surface: {SURFACE};
+    --surface-2: {SURFACE_2};
+    --text: {TEXT};
+    --muted: {MUTED};
+    --accent: {ACCENT};
+    --accent-2: {ACCENT_2};
+    --border: {BORDER};
+    --glow: {GLOW};
+    --good: {GOOD};
+    --title-a: {TITLE_A};
+    --title-b: {TITLE_B};
+    --card-shadow: {CARD_SHADOW};
+    --tile-shadow: {TILE_SHADOW};
+    --p-bg: {P["bg"]};
+    --p-border: {P["border"]};
+    --p-text: {P["text"]};
+    --p-muted: {P["muted"]};
+    --p-sub: {P["sub"]};
+    --p-ta: {P["ta"]};
+    --p-tb: {P["tb"]};
+    --p-ai: {P["ai"]};
+    --p-chip-bg: {P["chip_bg"]};
+    --p-chip-border: {P["chip_border"]};
+    --p-chip-text: {P["chip_text"]};
+    --p-logo-bg: {P["logo_bg"]};
+    --p-logo-border: {P["logo_border"]};
+    --p-ring: {P["ring"]};
+    --p-glow: {P["glow"]};
+    --p-wave: {P["wave"]};
+    --p-doc: {P["doc"]};
+}}
+"""
+
+static_css = """
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+.stApp, button, input, textarea {
+    font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+}
+
+.stApp {
+    background: var(--bg);
+    color: var(--text);
+}
+
+[data-testid="stHeader"] { background: transparent; }
+
+.block-container {
+    position: relative;
+    z-index: 1;
+    max-width: 1120px;
+    padding-top: 2rem;
+    padding-bottom: 3rem;
+}
+
+h1, h2, h3, h4, p, label, [data-testid="stMarkdownContainer"] { color: var(--text); }
+.muted { color: var(--muted) !important; }
+
+hr {
+    border: none !important;
+    height: 1px;
+    background: var(--border);
+}
+
+/* ---------- Sidebar ---------- */
+[data-testid="stSidebar"] {
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+}
+[data-testid="stSidebar"] * { color: var(--text); }
+
+/* ---------- Ambient background: one slow gradient orb + tiny particles ---------- */
+.bg-fx {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    overflow: hidden;
+}
+.bg-orb {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 640px;
+    height: 640px;
+    margin: -320px 0 0 -320px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, var(--accent) 0%, rgba(84, 67, 214, 0.55) 40%, transparent 70%);
+    filter: blur(90px);
+    opacity: 0.30;
+    animation: orb-drift 26s ease-in-out infinite alternate;
+}
+.bg-particle {
+    position: absolute;
+    bottom: -10px;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--accent);
+    opacity: 0;
+    animation: particle-rise linear infinite;
+}
+@keyframes orb-drift {
+    0%   { transform: translate(-6%, -4%) scale(1); }
+    100% { transform: translate(6%, 5%) scale(1.08); }
+}
+@keyframes particle-rise {
+    0%   { transform: translateY(0); opacity: 0; }
+    15%  { opacity: 0.35; }
+    85%  { opacity: 0.25; }
+    100% { transform: translateY(-105vh); opacity: 0; }
+}
+
+/* ---------- Brand ---------- */
+.brand {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 18px;
+    margin: 0.5rem 0 0.5rem;
+}
+.brand-logo {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 70px;
+    height: 70px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    font-size: 32px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    box-shadow: 0 0 0 6px var(--glow), 0 0 34px 6px var(--glow);
+}
+.brand-title {
+    margin: 0;
+    font-size: clamp(1.8rem, 4vw, 2.6rem);
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    line-height: 1.1;
+}
+.brand-title .lec {
+    background: linear-gradient(90deg, var(--title-a), var(--title-b));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+}
+.brand-title .ai { color: var(--accent); -webkit-text-fill-color: var(--accent); }
+.brand-subtitle {
+    color: var(--muted);
+    font-size: 1rem;
+    margin-top: 6px;
+}
+
+/* ---------- Waveform -> document animation ---------- */
+.wave-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 12px;
+}
+.wave { display: flex; align-items: center; gap: 3px; height: 26px; }
+.wave span {
+    width: 3px;
+    height: 100%;
+    border-radius: 3px;
+    background: var(--accent);
+    opacity: 0.85;
+    transform: scaleY(0.25);
+    animation: wave-bar 1.6s ease-in-out infinite;
+    animation-delay: calc(var(--i) * 0.09s);
+}
+.wave-arrow { color: var(--muted); font-size: 0.85rem; opacity: 0.7; }
+.doc { display: flex; flex-direction: column; gap: 4px; width: 34px; }
+.doc i {
+    display: block;
+    height: 3px;
+    border-radius: 3px;
+    background: var(--accent);
+    opacity: 0.55;
+    transform-origin: left;
+    animation: doc-line 3.2s ease-in-out infinite;
+}
+.doc i:nth-child(1) { width: 100%; }
+.doc i:nth-child(2) { width: 75%; animation-delay: 0.25s; }
+.doc i:nth-child(3) { width: 90%; animation-delay: 0.5s; }
+@keyframes wave-bar {
+    0%, 100% { transform: scaleY(0.22); }
+    50%      { transform: scaleY(1); }
+}
+@keyframes doc-line {
+    0%, 100% { transform: scaleX(0.55); opacity: 0.35; }
+    50%      { transform: scaleX(1); opacity: 0.7; }
+}
+
+/* ---------- Hero ---------- */
+.hero {
+    padding: 28px 32px;
+    border-radius: 24px;
+    background: linear-gradient(135deg, var(--surface) 0%, var(--surface-2) 100%);
+    border: 1px solid var(--border);
+    box-shadow: var(--tile-shadow);
+    margin: 22px 0 28px;
+}
+.hero h2 {
+    margin: 0 0 8px;
+    font-size: clamp(1.4rem, 3vw, 1.9rem);
+    font-weight: 800;
+}
+.hero p { margin: 0; color: var(--muted); font-size: 1rem; }
+
+/* ---------- Cards ---------- */
+[class*="st-key-card_"] {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 24px;
+    padding: 28px 30px;
+    margin: 10px 0 24px;
+    box-shadow: var(--card-shadow), 0 0 0 4px var(--glow);
+}
+
+.section-title { font-size: 1.2rem; font-weight: 800; margin-bottom: 4px; }
+.section-subtitle { color: var(--muted); font-size: 0.92rem; margin-bottom: 14px; }
+
+/* ---------- Metric tiles ---------- */
+.metric-card {
+    padding: 20px 22px;
+    border-radius: 20px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    box-shadow: var(--tile-shadow);
+    min-height: 100px;
+}
+.metric-label { color: var(--muted); font-size: 0.82rem; font-weight: 600; margin-bottom: 8px; }
+.metric-value { color: var(--text); font-size: 1.4rem; font-weight: 800; }
+
+/* ---------- Avatar + status ---------- */
+.avatar {
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    color: var(--accent) !important;
+    font-weight: 800;
+    font-size: 1.05rem;
+}
+.status-pill {
+    display: inline-block;
+    padding: 6px 16px;
+    border-radius: 999px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    color: var(--good) !important;
+    font-size: 0.8rem;
+    font-weight: 800;
+}
+
+/* ---------- Form ---------- */
+[data-testid="stForm"] {
+    border: none !important;
+    padding: 4px 0 0 !important;
+    background: transparent;
+}
+[data-testid="stExpander"] {
+    border: 1px solid var(--border) !important;
+    border-radius: 18px !important;
+}
+
+/* ---------- Text inputs ---------- */
+[data-testid="stTextInputRootElement"],
+[data-testid="stTextAreaRootElement"] {
+    background: var(--surface-2) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 14px !important;
+    box-shadow: none !important;
+}
+[data-testid="stTextInputRootElement"]:focus-within,
+[data-testid="stTextAreaRootElement"]:focus-within {
+    border-color: var(--accent) !important;
+    box-shadow: 0 0 0 3px var(--glow) !important;
+}
+[data-testid="stTextInputRootElement"] [data-baseweb],
+[data-testid="stTextInputRootElement"] div,
+[data-testid="stTextAreaRootElement"] [data-baseweb],
+[data-testid="stTextAreaRootElement"] div {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+[data-testid="stTextInputRootElement"] input,
+[data-testid="stTextAreaRootElement"] textarea {
+    background: transparent !important;
+    color: var(--text) !important;
+    -webkit-text-fill-color: var(--text);
+}
+[data-testid="stTextInput"] input::placeholder { color: var(--muted) !important; opacity: 0.8; }
+[data-testid="stTextInputRootElement"] svg { color: var(--muted) !important; fill: currentColor; }
+[data-testid="stTextInput"] button { background: transparent !important; box-shadow: none !important; border: none !important; }
+
+/* ---------- File uploader ---------- */
+[data-testid="stFileUploader"] section {
+    background: var(--surface-2);
+    border: 1.5px dashed var(--border);
+    border-radius: 18px;
+    padding: 18px;
+}
+[data-testid="stFileUploader"] small,
+[data-testid="stFileUploader"] span { color: var(--muted); }
+
+[data-testid="stRadio"] label,
+[data-testid="stCheckbox"] label { color: var(--text) !important; }
+
+/* ---------- Buttons: secondary = outlined surface, primary = solid violet ---------- */
+.stButton > button,
+[data-testid="stFormSubmitButton"] > button,
+.stDownloadButton > button,
+[data-testid="stFileUploader"] button {
+    border: 1px solid var(--border) !important;
+    border-radius: 14px !important;
+    padding: 0.7rem 1.2rem;
+    font-weight: 700;
+    color: var(--text) !important;
+    background: var(--surface) !important;
+    box-shadow: var(--tile-shadow) !important;
+    transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+.stButton > button:hover,
+.stDownloadButton > button:hover,
+[data-testid="stFileUploader"] button:hover {
+    border-color: var(--accent) !important;
+    color: var(--accent) !important;
+}
+.stButton > button:focus-visible,
+[data-testid="stFormSubmitButton"] > button:focus-visible,
+.stDownloadButton > button:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+}
+
+button[kind="primary"],
+button[kind="primaryFormSubmit"],
+[data-testid="stBaseButton-primary"],
+[data-testid="stBaseButton-primaryFormSubmit"] {
+    background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%) !important;
+    color: #FFFFFF !important;
+    border: 1px solid transparent !important;
+    box-shadow: 0 8px 22px var(--glow) !important;
+}
+button[kind="primary"]:hover,
+button[kind="primaryFormSubmit"]:hover,
+[data-testid="stBaseButton-primary"]:hover,
+[data-testid="stBaseButton-primaryFormSubmit"]:hover {
+    color: #FFFFFF !important;
+    transform: translateY(-1px);
+    box-shadow: 0 12px 28px var(--glow) !important;
+}
+button[kind="primary"] p,
+button[kind="primaryFormSubmit"] p,
+[data-testid="stBaseButton-primary"] p,
+[data-testid="stBaseButton-primaryFormSubmit"] p { color: #FFFFFF !important; }
+
+.stButton > button:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none !important;
+}
+
+/* link-style buttons (create account / back to sign in) */
+[class*="st-key-switch_"] button {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    min-height: 0 !important;
+    color: var(--accent) !important;
+    font-weight: 700;
+}
+[class*="st-key-switch_"] button p { color: var(--accent) !important; }
+[class*="st-key-switch_"] button:hover { text-decoration: underline; transform: none; }
+
+/* ---------- Alerts ---------- */
+[data-testid="stAlert"] {
+    background: var(--surface-2) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 16px !important;
+}
+[data-testid="stAlert"] div { background: transparent !important; color: var(--text) !important; }
+
+/* ---------- Progress ---------- */
+.stProgress > div > div {
+    background: var(--surface-2) !important;
+    border-radius: 999px;
+    height: 12px;
+    border: 1px solid var(--border);
+}
+.stProgress > div > div > div {
+    background: linear-gradient(90deg, var(--accent), var(--accent-2)) !important;
+    border-radius: 999px;
+}
+
+/* ---------- Tabs ---------- */
+[data-testid="stTabs"] button { color: var(--muted); font-weight: 700; }
+[data-testid="stTabs"] button[aria-selected="true"] { color: var(--accent); }
+[data-baseweb="tab-highlight"] { background-color: var(--accent) !important; height: 3px; border-radius: 3px; }
+[data-baseweb="tab-border"] { background-color: var(--border) !important; }
+
+/* ---------- Footer ---------- */
+.footer {
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.82rem;
+    padding-top: 22px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .bg-orb, .bg-particle, .wave span, .doc i { animation: none !important; }
+    .wave span { transform: scaleY(0.6); }
+}
+"""
+
+st.markdown(f"<style>{theme_vars}{static_css}</style>", unsafe_allow_html=True)
+
 
 # ------------------------------------------------------------
-# Custom styling
+# UI helpers
 # ------------------------------------------------------------
-st.markdown(
-    f"""
-    <style>
-    :root {{
-        color-scheme: {"dark" if st.session_state.dark_mode else "light"};
-    }}
+def card(name: str):
+    """A raised card that really wraps the widgets inside it."""
+    return st.container(key=f"card_{name}")
 
-    .stApp {{
-        background:
-            radial-gradient(ellipse at 15% 0%, rgba(124, 58, 237, 0.18), transparent 36%),
-            radial-gradient(ellipse at 90% 15%, rgba(236, 72, 153, 0.12), transparent 30%),
-            {BG};
-        color: {TEXT};
-    }}
 
-    [data-testid="stHeader"] {{
-        background: transparent;
-    }}
+def show_background_fx() -> None:
+    """Very subtle: one drifting gradient orb and a handful of tiny rising particles."""
+    particles = "".join(
+        f'<span class="bg-particle" style="left:{left}%;animation-duration:{dur}s;animation-delay:{delay}s;"></span>'
+        for left, dur, delay in [
+            (8, 34, 0), (17, 42, 6), (27, 38, 12), (38, 46, 3), (49, 36, 9),
+            (58, 44, 15), (68, 40, 4), (77, 35, 11), (86, 45, 7), (94, 39, 14),
+        ]
+    )
+    st.markdown(f'<div class="bg-fx"><div class="bg-orb"></div>{particles}</div>', unsafe_allow_html=True)
 
-    [data-testid="stSidebar"] {{
-        background: {SIDEBAR};
-        border-right: 1px solid {BORDER};
-    }}
 
-    [data-testid="stSidebar"] * {{
-        color: {TEXT};
-    }}
-
-    .block-container {{
-        max-width: 1120px;
-        padding-top: 2rem;
-        padding-bottom: 3rem;
-    }}
-
-    h1, h2, h3, h4, p, label, [data-testid="stMarkdownContainer"] {{
-        color: {TEXT};
-    }}
-
-    .muted {{
-        color: {MUTED} !important;
-    }}
-
-    .brand {{
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 16px;
-        margin: 0.5rem 0 0.35rem;
-    }}
-
-    .brand-logo {{
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        width: 68px;
-        height: 68px;
-        flex-shrink: 0;
-        border-radius: 21px;
-        font-size: 34px;
-        background: linear-gradient(135deg, #7C3AED, #EC4899);
-        box-shadow: 0 12px 30px rgba(124, 58, 237, 0.30);
-    }}
-
-    .brand-title {{
-        margin: 0;
-        font-size: clamp(1.8rem, 4vw, 2.65rem);
-        font-weight: 800;
-        letter-spacing: -1.2px;
-        line-height: 1.1;
-        color: {TEXT};
-    }}
-
-    .brand-title span {{
-        background: linear-gradient(90deg, #A78BFA, #F472B6);
-        -webkit-background-clip: text;
-        background-clip: text;
-        color: transparent;
-    }}
-
-    .brand-subtitle {{
-        color: {MUTED};
-        font-size: 1rem;
-        margin-top: 8px;
-    }}
-
-    .hero {{
-        padding: 26px 28px;
-        border: 1px solid {BORDER};
-        border-radius: 24px;
-        background: linear-gradient(120deg, rgba(124, 58, 237, 0.16), rgba(236, 72, 153, 0.08));
-        margin: 18px 0 22px;
-    }}
-
-    .hero h2 {{
-        margin: 0 0 8px;
-        font-size: clamp(1.45rem, 3vw, 2rem);
-        color: {TEXT};
-    }}
-
-    .hero p {{
-        margin: 0;
-        color: {MUTED};
-        font-size: 1rem;
-    }}
-
-    .custom-card {{
-        background: {CARD};
-        border: 1px solid {BORDER};
-        border-radius: 22px;
-        padding: 24px;
-        margin: 10px 0 18px;
-        box-shadow: 0 12px 35px rgba(10, 10, 30, 0.08);
-    }}
-
-    .section-title {{
-        font-size: 1.15rem;
-        font-weight: 750;
-        margin-bottom: 6px;
-        color: {TEXT};
-    }}
-
-    .section-subtitle {{
-        color: {MUTED};
-        font-size: 0.92rem;
-        margin-bottom: 18px;
-    }}
-
-    .metric-card {{
-        padding: 17px 18px;
-        border-radius: 18px;
-        border: 1px solid {BORDER};
-        background: {CARD};
-        min-height: 100px;
-    }}
-
-    .metric-label {{
-        color: {MUTED};
-        font-size: 0.84rem;
-        margin-bottom: 8px;
-    }}
-
-    .metric-value {{
-        color: {TEXT};
-        font-size: 1.45rem;
-        font-weight: 800;
-    }}
-
-    .avatar {{
-        width: 46px;
-        height: 46px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border-radius: 15px;
-        background: linear-gradient(135deg, #7C3AED, #EC4899);
-        color: white !important;
-        font-weight: 800;
-        font-size: 1.1rem;
-    }}
-
-    .status-pill {{
-        display: inline-block;
-        padding: 6px 11px;
-        border-radius: 999px;
-        background: rgba(34, 197, 94, 0.13);
-        color: #22C55E !important;
-        font-size: 0.8rem;
-        font-weight: 700;
-    }}
-
-    [data-testid="stForm"], [data-testid="stExpander"] {{
-        border-color: {BORDER} !important;
-        border-radius: 18px !important;
-    }}
-
-    [data-testid="stTextInput"] input,
-    [data-testid="stTextArea"] textarea,
-    [data-testid="stNumberInput"] input {{
-        background: {INPUT_BG} !important;
-        color: {TEXT} !important;
-        border: 1px solid {BORDER} !important;
-        border-radius: 12px !important;
-    }}
-
-    [data-testid="stFileUploader"] section {{
-        background: {CARD_ALT};
-        border: 1.5px dashed #8B5CF6;
-        border-radius: 16px;
-        padding: 14px;
-    }}
-
-    [data-testid="stFileUploader"] small,
-    [data-testid="stFileUploader"] span {{
-        color: {MUTED};
-    }}
-
-    [data-testid="stRadio"] label,
-    [data-testid="stCheckbox"] label {{
-        color: {TEXT} !important;
-    }}
-
-    .stButton > button,
-    [data-testid="stFormSubmitButton"] > button,
-    .stDownloadButton > button {{
-        border: 0;
-        border-radius: 12px;
-        padding: 0.65rem 1.05rem;
-        font-weight: 750;
-        color: white !important;
-        background: linear-gradient(100deg, #7C3AED, #C026D3, #EC4899);
-        transition: transform 0.15s ease, box-shadow 0.15s ease;
-        box-shadow: 0 7px 18px rgba(124, 58, 237, 0.19);
-    }}
-
-    .stButton > button:hover,
-    [data-testid="stFormSubmitButton"] > button:hover,
-    .stDownloadButton > button:hover {{
-        transform: translateY(-2px);
-        box-shadow: 0 10px 24px rgba(124, 58, 237, 0.28);
-    }}
-
-    [data-testid="stTabs"] button {{
-        color: {TEXT};
-    }}
-
-    hr {{
-        border-color: {BORDER};
-    }}
-
-    .footer {{
-        text-align: center;
-        color: {MUTED};
-        font-size: 0.82rem;
-        padding-top: 22px;
-    }}
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
+def waveform_html() -> str:
+    bars = "".join(f'<span style="--i:{i}"></span>' for i in range(14))
+    return (
+        '<div class="wave-row">'
+        f'<div class="wave">{bars}</div>'
+        '<span class="wave-arrow">→</span>'
+        '<div class="doc"><i></i><i></i><i></i></div>'
+        "</div>"
+    )
 
 
 def show_brand() -> None:
     st.markdown(
-        """
+        f"""
         <div class="brand">
             <div class="brand-logo">🎓</div>
             <div>
-                <div class="brand-title">Lecture <span>AI</span></div>
+                <div class="brand-title"><span class="lec">Lecture</span> <span class="ai">AI</span></div>
                 <div class="brand-subtitle">Your lecture, simplified.</div>
+                {waveform_html()}
             </div>
         </div>
         """,
@@ -324,6 +574,8 @@ def show_footer() -> None:
     )
 
 
+show_background_fx()
+
 # ------------------------------------------------------------
 # Sidebar: theme toggle and navigation
 # ------------------------------------------------------------
@@ -332,17 +584,20 @@ with st.sidebar:
     st.caption("Smart AI-powered lecture summarizer")
     st.divider()
 
-    st.toggle("🌙 Dark mode", key="dark_mode", help="Switch between dark and light appearance.")
+    theme_label = "☀️  Switch to light mode" if st.session_state.dark_mode else "🌙  Switch to dark mode"
+    if st.button(theme_label, use_container_width=True, key="theme_button"):
+        st.session_state.dark_mode = not st.session_state.dark_mode
+        st.rerun()
 
     if st.session_state.screen != "login":
         username = st.session_state.username or "Student"
         initials = "".join(part[0] for part in username.split()[:2]).upper() or "S"
         st.markdown(
             f"""
-            <div style="display:flex;align-items:center;gap:12px;margin:18px 0;">
+            <div style="display:flex;align-items:center;gap:14px;margin:18px 0;">
                 <div class="avatar">{initials}</div>
                 <div>
-                    <div style="font-weight:750;color:{TEXT};">{username}</div>
+                    <div style="font-weight:800;color:{TEXT};">{username}</div>
                     <div style="font-size:0.8rem;color:{MUTED};">Student workspace</div>
                 </div>
             </div>
@@ -359,51 +614,200 @@ with st.sidebar:
             st.session_state.username = ""
             st.session_state.processed = False
             st.session_state.uploaded_file_name = ""
+            st.session_state.auth_mode = "signin"
             go("login")
 
     st.markdown("---")
-    st.caption("Prototype build · Backend processing is simulated")
 
 # ------------------------------------------------------------
 # Login screen
 # ------------------------------------------------------------
 if st.session_state.screen == "login":
-    show_brand()
     st.markdown(
         """
-        <div class="hero">
-            <h2>Your meetings and lectures, made easier.</h2>
-            <p>Turn long recordings into readable summaries and revision-friendly notes.</p>
-        </div>
+        <style>
+        .block-container { padding-top: 3.5rem !important; padding-bottom: 0.5rem !important; max-width: 1000px; }
+        [class*="st-key-card_login"] { padding: 14px !important; gap: 0.6rem; }
+        [class*="st-key-card_login"] [data-testid="stHorizontalBlock"] { align-items: stretch; gap: 1.2rem; margin: 0 !important; }
+
+        /* Make the left column (and every wrapper inside it) fill the row so the panel
+           has equal space on top and bottom, with no overflow past the card edge */
+        [class*="st-key-card_login"] [data-testid="stColumn"]:first-child,
+        [class*="st-key-card_login"] [data-testid="stColumn"]:first-child > [data-testid="stVerticalBlock"],
+        [class*="st-key-card_login"] [data-testid="stColumn"]:first-child [data-testid="stElementContainer"],
+        [class*="st-key-card_login"] [data-testid="stColumn"]:first-child [data-testid="stMarkdown"],
+        [class*="st-key-card_login"] [data-testid="stColumn"]:first-child [data-testid="stMarkdownContainer"] {
+            height: 100%;
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+        @media (max-width: 640px) {
+            [class*="st-key-card_login"] [data-testid="stColumn"]:first-child,
+            [class*="st-key-card_login"] [data-testid="stColumn"]:first-child > [data-testid="stVerticalBlock"],
+            [class*="st-key-card_login"] [data-testid="stColumn"]:first-child [data-testid="stElementContainer"],
+            [class*="st-key-card_login"] [data-testid="stColumn"]:first-child [data-testid="stMarkdown"],
+            [class*="st-key-card_login"] [data-testid="stColumn"]:first-child [data-testid="stMarkdownContainer"] { height: auto; }
+        }
+        [class*="st-key-card_login"] [data-testid="stColumn"]:last-child { padding: 18px 22px 10px; }
+
+        /* Left branding panel: centred, theme-aware (light lavender in light mode, navy -> violet in dark) */
+        .login-panel {
+            box-sizing: border-box;
+            height: 100%;
+            margin: 0;
+            padding: 34px 30px;
+            border-radius: 18px;
+            background: var(--p-bg);
+            border: 1px solid var(--p-border);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            gap: 4px;
+        }
+        .login-panel .brand {
+            flex-direction: column;
+            justify-content: center;
+            text-align: center;
+            margin: 0 0 14px;
+            gap: 18px;
+        }
+        .login-panel .brand-logo {
+            width: 84px; height: 84px; font-size: 40px;
+            background: var(--p-logo-bg);
+            border: 1px solid var(--p-logo-border);
+            box-shadow: 0 0 0 8px var(--p-ring), 0 0 44px 10px var(--p-glow);
+        }
+        .login-panel .brand-title { font-size: 2.5rem; }
+        .login-panel .brand-title .lec {
+            background: linear-gradient(90deg, var(--p-ta), var(--p-tb));
+            -webkit-background-clip: text; background-clip: text;
+        }
+        .login-panel .brand-title .ai { color: var(--p-ai); -webkit-text-fill-color: var(--p-ai); }
+        .login-panel .brand-subtitle { color: var(--p-sub); }
+        .login-panel .wave-row { justify-content: center; }
+        .login-panel .wave span { background: var(--p-wave); }
+        .login-panel .doc i { background: var(--p-doc); }
+        .login-panel .wave-arrow { color: var(--p-sub); }
+
+        .login-tagline { color: var(--p-text) !important; font-size: 1rem; line-height: 1.55; margin: 6px 0 20px; }
+        .login-features { display: flex; flex-direction: column; gap: 12px; margin-bottom: 26px; width: 100%; }
+        .login-feature {
+            display: flex; align-items: center; justify-content: center; gap: 12px;
+            padding: 11px 14px;
+            border-radius: 14px;
+            background: var(--p-chip-bg);
+            border: 1px solid var(--p-chip-border);
+            color: var(--p-chip-text) !important;
+            font-size: 0.95rem;
+            font-weight: 600;
+        }
+        .login-panel-footer { margin-top: auto; color: var(--p-muted) !important; font-size: 0.82rem; }
+
+        /* Right column: password label row */
+        .field-row { display: flex; justify-content: space-between; align-items: baseline; margin: 4px 0 -6px; }
+        .field-row .lbl { font-size: 0.875rem; color: var(--text); }
+        .field-row a { font-size: 0.82rem; font-weight: 600; color: var(--accent) !important; text-decoration: none; }
+        .field-row a:hover { text-decoration: underline; }
+        .switch-line { text-align: center; color: var(--muted); font-size: 0.9rem; margin-top: 14px; }
+        .footer { padding-top: 6px; }
+        </style>
         """,
         unsafe_allow_html=True,
     )
 
-    left, center, right = st.columns([1, 1.15, 1])
-    with center:
-        st.markdown('<div class="custom-card">', unsafe_allow_html=True)
-        st.markdown('<div class="section-title">Welcome back</div>', unsafe_allow_html=True)
-        st.markdown(
-            '<div class="section-subtitle">Sign in to open your personal lecture workspace.</div>',
-            unsafe_allow_html=True,
-        )
+    with card("login"):
+        info_col, form_col = st.columns([1.05, 1])
 
-        with st.form("login_form"):
-            username = st.text_input("Username or email", placeholder="e.g. ashutosh@example.com")
-            password = st.text_input("Password", type="password", placeholder="Enter any password for the demo")
-            st.checkbox("Remember me", value=True)
-            submitted = st.form_submit_button("Sign in  →", use_container_width=True)
+        with info_col:
+            st.markdown(
+                f"""
+                <div class="login-panel">
+                    <div class="brand">
+                        <div class="brand-logo">🎓</div>
+                        <div>
+                            <div class="brand-title"><span class="lec">Lecture</span> <span class="ai">AI</span></div>
+                            <div class="brand-subtitle">Your lecture, simplified.</div>
+                            {waveform_html()}
+                        </div>
+                    </div>
+                    <p class="login-tagline">Turn long recordings into readable summaries and revision-friendly notes.</p>
+                    <div class="login-features">
+                        <div class="login-feature">🎙️ AI Transcription</div>
+                        <div class="login-feature">🧠 Smart Summaries</div>
+                        <div class="login-feature">📚 Revision-ready Notes</div>
+                    </div>
+                    <div class="login-panel-footer">Built for smarter learning.</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
 
-        if submitted:
-            if username.strip() and password:
-                st.session_state.username = username.strip().split("@")[0]
-                st.session_state.signed_in_at = datetime.now().strftime("%d %b %Y, %I:%M %p")
-                go("upload")
+        with form_col:
+            if st.session_state.auth_mode == "signin":
+                st.markdown('<div class="section-title">Welcome back</div>', unsafe_allow_html=True)
+                st.markdown(
+                    '<div class="section-subtitle">Sign in to open your personal lecture workspace.</div>',
+                    unsafe_allow_html=True,
+                )
+
+                with st.form("login_form"):
+                    username = st.text_input("Username or email", placeholder="e.g. ashutosh@example.com")
+                    st.markdown(
+                        '<div class="field-row"><span class="lbl">Password</span>'
+                        '<a href="#">Forgot password?</a></div>',
+                        unsafe_allow_html=True,
+                    )
+                    password = st.text_input(
+                        "Password",
+                        type="password",
+                        placeholder="Enter your password",
+                        label_visibility="collapsed",
+                    )
+                    st.checkbox("Remember me", value=True)
+                    submitted = st.form_submit_button("Sign in  →", type="primary", use_container_width=True)
+
+                if submitted:
+                    if username.strip() and password:
+                        st.session_state.username = username.strip().split("@")[0]
+                        st.session_state.signed_in_at = datetime.now().strftime("%d %b %Y, %I:%M %p")
+                        go("upload")
+                    else:
+                        st.error("Enter both a username/email and a password to continue.")
+
+                st.markdown('<div class="switch-line">Don\'t have an account?</div>', unsafe_allow_html=True)
+                if st.button("Create one", key="switch_to_signup", use_container_width=True):
+                    st.session_state.auth_mode = "signup"
+                    st.rerun()
+
             else:
-                st.error("Enter both a username/email and a password to continue.")
+                st.markdown('<div class="section-title">Create your account</div>', unsafe_allow_html=True)
+                st.markdown(
+                    '<div class="section-subtitle">Set up your lecture workspace in a few seconds.</div>',
+                    unsafe_allow_html=True,
+                )
 
-        st.caption("Demo login only — real authentication has not been connected yet.")
-        st.markdown("</div>", unsafe_allow_html=True)
+                with st.form("signup_form"):
+                    new_name = st.text_input("Full name", placeholder="e.g. Ashutosh Verma")
+                    new_email = st.text_input("Email", placeholder="you@example.com")
+                    new_password = st.text_input("Password", type="password", placeholder="Choose a password")
+                    new_confirm = st.text_input("Confirm password", type="password", placeholder="Repeat your password")
+                    created = st.form_submit_button("Create account  →", type="primary", use_container_width=True)
+
+                if created:
+                    if not (new_name.strip() and new_email.strip() and new_password):
+                        st.error("Fill in your name, email, and a password to continue.")
+                    elif new_password != new_confirm:
+                        st.error("The passwords don't match. Re-enter them and try again.")
+                    else:
+                        st.session_state.username = new_name.strip().split()[0]
+                        st.session_state.signed_in_at = datetime.now().strftime("%d %b %Y, %I:%M %p")
+                        go("upload")
+
+                st.markdown('<div class="switch-line">Already have an account?</div>', unsafe_allow_html=True)
+                if st.button("Sign in", key="switch_to_signin", use_container_width=True):
+                    st.session_state.auth_mode = "signin"
+                    st.rerun()
 
     show_footer()
 
@@ -427,7 +831,7 @@ else:
     for col, label, value in [
         (m1, "WORKFLOW", "3 simple steps"),
         (m2, "SUPPORTED INPUTS", "Audio + video"),
-        (m3, "CURRENT STATUS", "Prototype"),
+        (m3, "OUTPUT", "Transcript + summary"),
     ]:
         with col:
             st.markdown(
@@ -440,33 +844,34 @@ else:
                 unsafe_allow_html=True,
             )
 
+    st.write("")
+
     # Upload screen
     if st.session_state.screen == "upload":
-        st.markdown('<div class="custom-card">', unsafe_allow_html=True)
-        st.markdown('<div class="section-title">📤 Upload your lecture</div>', unsafe_allow_html=True)
-        st.markdown(
-            '<div class="section-subtitle">Choose a recording to prepare it for transcription and summarization.</div>',
-            unsafe_allow_html=True,
-        )
+        process_clicked = False
+        with card("upload"):
+            st.markdown('<div class="section-title">📤 Upload your lecture</div>', unsafe_allow_html=True)
+            st.markdown(
+                '<div class="section-subtitle">Choose a recording to prepare it for transcription and summarization.</div>',
+                unsafe_allow_html=True,
+            )
 
-        uploaded_file = st.file_uploader(
-            "Choose an audio or video file",
-            type=["mp3", "wav", "m4a", "mp4", "mkv", "webm", "ogg", "mpeg"],
-            help="This prototype accepts common audio and video file types.",
-        )
+            uploaded_file = st.file_uploader(
+                "Choose an audio or video file",
+                type=["mp3", "wav", "m4a", "mp4", "mkv", "webm", "ogg", "mpeg"],
+                help="Accepts common audio and video file types.",
+            )
 
-        if uploaded_file is not None:
-            st.success(f"Selected: {uploaded_file.name}")
-            st.caption(f"File size: {uploaded_file.size / (1024 * 1024):.2f} MB")
+            if uploaded_file is not None:
+                st.success(f"Selected: {uploaded_file.name}")
+                st.caption(f"File size: {uploaded_file.size / (1024 * 1024):.2f} MB")
 
-        st.info("The backend is not connected yet. Processing on this screen is a demonstration.")
-        process_clicked = st.button(
-            "✨  Process lecture",
-            type="primary",
-            use_container_width=True,
-            disabled=uploaded_file is None,
-        )
-        st.markdown("</div>", unsafe_allow_html=True)
+            process_clicked = st.button(
+                "✨  Process lecture",
+                type="primary",
+                use_container_width=True,
+                disabled=uploaded_file is None,
+            )
 
         if process_clicked and uploaded_file is not None:
             st.session_state.uploaded_file_name = uploaded_file.name
@@ -475,44 +880,33 @@ else:
 
     # Processing screen
     elif st.session_state.screen == "processing":
-        st.markdown('<div class="custom-card">', unsafe_allow_html=True)
-        st.markdown('<div class="section-title">⏳ Processing your lecture</div>', unsafe_allow_html=True)
-        st.markdown(
-            f'<div class="section-subtitle">File: {st.session_state.uploaded_file_name or "Your recording"}</div>',
-            unsafe_allow_html=True,
-        )
-        st.write("A connected backend will eventually handle audio extraction, transcription, summarization, and PDF generation.")
-        st.progress(0.25, text="Preparing audio")
-        st.progress(0.50, text="Transcribing speech")
-        st.progress(0.75, text="Generating summary")
-        st.progress(1.0, text="Preparing results")
-        st.warning("This is a simulated workflow. No real transcription or AI processing is happening yet.")
+        with card("processing"):
+            st.markdown('<div class="section-title">⏳ Processing your lecture</div>', unsafe_allow_html=True)
+            st.markdown(
+                f'<div class="section-subtitle">File: {st.session_state.uploaded_file_name or "Your recording"}</div>',
+                unsafe_allow_html=True,
+            )
+            st.write("We extract the audio, transcribe the speech, and write a concise summary of your lecture.")
+            st.progress(0.25, text="Preparing audio")
+            st.progress(0.50, text="Transcribing speech")
+            st.progress(0.75, text="Generating summary")
+            st.progress(1.0, text="Preparing results")
 
-        if st.button("Complete demo processing", use_container_width=True):
-            with st.spinner("Simulating processing..."):
-                time.sleep(1.5)
-            st.session_state.processed = True
-            go("results")
-        if st.button("← Back to upload", use_container_width=True):
-            go("upload")
-        st.markdown("</div>", unsafe_allow_html=True)
+            if st.button("Show results", type="primary", use_container_width=True):
+                with st.spinner("Preparing results..."):
+                    time.sleep(1.5)
+                st.session_state.processed = True
+                go("results")
+            if st.button("← Back to upload", use_container_width=True):
+                go("upload")
 
     # Results screen
     elif st.session_state.screen == "results":
         if not st.session_state.processed:
-            st.info("There are no completed results yet. Upload a recording to try the demo.")
+            st.info("There are no completed results yet. Upload a recording to get started.")
             if st.button("Upload a lecture", use_container_width=True):
                 go("upload")
         else:
-            st.markdown('<div class="custom-card">', unsafe_allow_html=True)
-            st.markdown('<div class="section-title">✅ Your lecture results</div>', unsafe_allow_html=True)
-            st.markdown(
-                f'<div class="section-subtitle">Demo output for: {st.session_state.uploaded_file_name}</div>',
-                unsafe_allow_html=True,
-            )
-            st.markdown('<span class="status-pill">Demo complete</span>', unsafe_allow_html=True)
-            st.write("")
-
             transcript = (
                 "Welcome to today's lecture. We will introduce the main topic, define the key concepts, "
                 "and review a few examples. First, focus on understanding the problem. Next, identify the "
@@ -524,31 +918,37 @@ else:
 - **Main idea:** Understand the topic by identifying its core concepts and relationships.
 - **Key points:** Learn the definitions, follow the examples, and connect each concept to the problem being discussed.
 - **Suggested revision:** Review the key terms, then try explaining each example in your own words.
-- **Next step:** Add the real transcription and AI summarization pipeline when the backend is ready.
+- **Next step:** Re-read the transcript and note any terms you want to look up."""
 
-*This is placeholder content for the UI prototype, not a summary of the uploaded file.*"""
-
-            tab_summary, tab_transcript = st.tabs(["📝 Summary", "🎙️ Transcript"])
-            with tab_summary:
-                st.markdown(summary)
-                st.download_button(
-                    "⬇️ Download summary",
-                    data=summary,
-                    file_name="lecture_summary.md",
-                    mime="text/markdown",
-                    use_container_width=True,
+            with card("results"):
+                st.markdown('<div class="section-title">✅ Your lecture results</div>', unsafe_allow_html=True)
+                st.markdown(
+                    f'<div class="section-subtitle">Results for: {st.session_state.uploaded_file_name}</div>',
+                    unsafe_allow_html=True,
                 )
-            with tab_transcript:
-                st.write(transcript)
-                st.download_button(
-                    "⬇️ Download transcript",
-                    data=transcript,
-                    file_name="lecture_transcript.txt",
-                    mime="text/plain",
-                    use_container_width=True,
-                )
+                st.markdown('<span class="status-pill">Complete</span>', unsafe_allow_html=True)
+                st.write("")
 
-            st.markdown("</div>", unsafe_allow_html=True)
+                tab_summary, tab_transcript = st.tabs(["📝 Summary", "🎙️ Transcript"])
+                with tab_summary:
+                    st.markdown(summary)
+                    st.download_button(
+                        "⬇️ Download summary",
+                        data=summary,
+                        file_name="lecture_summary.md",
+                        mime="text/markdown",
+                        use_container_width=True,
+                    )
+                with tab_transcript:
+                    st.write(transcript)
+                    st.download_button(
+                        "⬇️ Download transcript",
+                        data=transcript,
+                        file_name="lecture_transcript.txt",
+                        mime="text/plain",
+                        use_container_width=True,
+                    )
+
             if st.button("＋ Process another lecture", use_container_width=True):
                 st.session_state.processed = False
                 st.session_state.uploaded_file_name = ""
