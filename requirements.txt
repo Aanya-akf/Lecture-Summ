@@ -1,5 +1,5 @@
 streamlit>=1.40
 extra-streamlit-components>=0.1.71
-supabase
+supabase>=2.10
 python-dotenv
 streamlit-cookies-controller
