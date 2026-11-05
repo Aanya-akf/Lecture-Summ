@@ -198,6 +198,8 @@ if st.session_state.dark_mode:
     PRIMARY_BG = "linear-gradient(135deg, #8B7CFF 0%, #6C5CE7 100%)"
     PRIMARY_SHADOW = f"0 8px 22px {GLOW}"
     PRIMARY_SHADOW_HOVER = f"0 12px 28px {GLOW}"
+    LG = ("#0E1220", "#1A1245", "#10295C", "#2E1253")   # login page background
+    PG = ("#1B1A5C", "#4B35C9", "#2563C9", "#8B3FC9")   # login left panel
     P = dict(
         bg="linear-gradient(160deg, #141C33 0%, #2B2377 55%, #5443D6 100%)",
         border="rgba(255, 255, 255, 0.10)", text="#DCDFF5", muted="#B8BCE0", sub="#C9CDEB",
@@ -229,6 +231,8 @@ else:
     PRIMARY_BG = "linear-gradient(135deg, #5B49E0 0%, #3E2FB5 100%)"
     PRIMARY_SHADOW = "0 4px 0 #2C2090, 0 12px 26px rgba(62, 47, 181, 0.38)"
     PRIMARY_SHADOW_HOVER = "0 5px 0 #2C2090, 0 16px 30px rgba(62, 47, 181, 0.45)"
+    LG = ("#EAF0FA", "#E5DCFF", "#D6EBFF", "#FFE2F2")   # login page background
+    PG = ("#ECE6FF", "#D3E6FF", "#F8DCF4", "#DCD2FF")   # login left panel
     P = dict(
         bg="linear-gradient(160deg, #F6F3FF 0%, #E3DCFF 55%, #CDC2FF 100%)",
         border="rgba(108, 92, 231, 0.25)", text="#2A2F52", muted="#4F5680", sub="#4F5680",
@@ -265,6 +269,8 @@ theme_vars = f"""
     --primary-bg: {PRIMARY_BG};
     --primary-shadow: {PRIMARY_SHADOW};
     --primary-shadow-hover: {PRIMARY_SHADOW_HOVER};
+    --lg1: {LG[0]}; --lg2: {LG[1]}; --lg3: {LG[2]}; --lg4: {LG[3]};
+    --pg1: {PG[0]}; --pg2: {PG[1]}; --pg3: {PG[2]}; --pg4: {PG[3]};
     --p-bg: {P["bg"]};
     --p-border: {P["border"]};
     --p-text: {P["text"]};
@@ -799,7 +805,7 @@ def _wave_path(amp: int, period: int = 100, width: int = 4400, y: int = 40) -> s
     return d
 
 
-def show_background_fx() -> None:
+def show_background_fx(login: bool = False) -> None:
     # Very subtle: two drifting gradient orbs, tiny rising particles, soft bubbles,
     # a few twinkles and two slow audio-wave lines along the bottom.
     particles = "".join(
@@ -828,8 +834,22 @@ def show_background_fx() -> None:
         f'<svg class="bg-wave bg-wave-b" viewBox="0 0 4400 80" width="4400" height="80" preserveAspectRatio="none">'
         f'<path d="{_wave_path(16)}" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>'
     )
+    login_fx = ""
+    if login:
+        shapes = "".join(
+            f'<span class="lg-shape {cls}" style="left:{left}%;top:{top}%;width:{size}px;height:{size}px;'
+            f'animation-duration:{dur}s;animation-delay:{delay}s;"></span>'
+            for cls, left, top, size, dur, delay in [
+                ("ring-a", 8, 14, 90, 26, 0), ("ring-b", 88, 12, 70, 30, -6), ("sq-a", 4, 70, 64, 34, -10),
+                ("ring-c", 92, 66, 100, 28, -3), ("sq-b", 46, 4, 40, 24, -14), ("ring-a", 52, 88, 54, 32, -8),
+            ]
+        )
+        login_fx = (
+            '<div class="lg-orb lg-orb-1"></div><div class="lg-orb lg-orb-2"></div>'
+            f'<div class="lg-orb lg-orb-3"></div>{shapes}'
+        )
     st.markdown(
-        f'<div class="bg-fx"><div class="bg-orb"></div><div class="bg-orb2"></div>{waves}{bubbles}{sparks}{particles}</div>',
+        f'<div class="bg-fx"><div class="bg-orb"></div><div class="bg-orb2"></div>{login_fx}{waves}{bubbles}{sparks}{particles}</div>',
         unsafe_allow_html=True,
     )
 
@@ -879,7 +899,7 @@ def show_footer() -> None:
     )
 
 
-show_background_fx()
+show_background_fx(login=st.session_state.screen == "login")
 
 # ------------------------------------------------------------
 # "Remember me": keep a refresh token in a cookie and restore the login on the next visit
@@ -1059,6 +1079,65 @@ if st.session_state.screen == "login":
         .field-row a:hover { text-decoration: underline; }
         .switch-line { text-align: center; color: var(--muted); font-size: 0.9rem; margin-top: 14px; }
         .footer { padding-top: 6px; }
+
+        /* ===== Colourful login: animated gradient page, glowing gradient card, drifting shapes ===== */
+        .stApp {
+            background: linear-gradient(125deg, var(--lg1), var(--lg2), var(--lg3), var(--lg4), var(--lg1)) !important;
+            background-size: 300% 300% !important;
+            animation: gradient-shift 22s ease infinite alternate;
+        }
+        [class*="st-key-card_login"] {
+            border: 2px solid transparent !important;
+            background:
+                linear-gradient(var(--surface), var(--surface)) padding-box,
+                linear-gradient(120deg, #8B7CFF, #4DA3FF, #FF7AC8, #FFB86B, #8B7CFF) border-box !important;
+            background-size: 100% 100%, 300% 300% !important;
+            animation: border-flow 9s ease-in-out infinite alternate;
+            box-shadow: 0 24px 70px rgba(108, 92, 231, 0.30), 0 0 60px rgba(255, 122, 200, 0.14) !important;
+        }
+        .login-panel {
+            background: linear-gradient(135deg, var(--pg1), var(--pg2), var(--pg3), var(--pg4)) !important;
+            background-size: 300% 300% !important;
+            animation: gradient-shift 16s ease infinite alternate;
+        }
+        .login-panel .brand-logo { animation: logo-pulse 4.5s ease-in-out infinite; }
+        .login-panel .wave span:nth-child(3n)   { background: #FF7AC8; }
+        .login-panel .wave span:nth-child(3n+1) { background: #4DA3FF; }
+        .login-feature { animation: chip-float 6s ease-in-out infinite; }
+        .login-feature:nth-child(2) { animation-delay: -2s; }
+        .login-feature:nth-child(3) { animation-delay: -4s; }
+
+        .lg-orb { position: absolute; border-radius: 50%; filter: blur(70px); opacity: 0.38; }
+        .lg-orb-1 { width: 420px; height: 420px; top: -140px; left: -100px;
+                    background: radial-gradient(circle, #FF6AC1, transparent 70%); animation: orb-drift 24s ease-in-out infinite alternate; }
+        .lg-orb-2 { width: 400px; height: 400px; bottom: -150px; left: 14%;
+                    background: radial-gradient(circle, #3EC6FF, transparent 70%); animation: orb-drift-2 30s ease-in-out infinite alternate; }
+        .lg-orb-3 { width: 440px; height: 440px; top: 18%; right: -140px;
+                    background: radial-gradient(circle, #8B7CFF, transparent 70%); animation: orb-drift 28s ease-in-out infinite alternate-reverse; }
+
+        .lg-shape { position: absolute; opacity: 0.35; animation: shape-float linear infinite; }
+        .lg-shape.ring-a { border-radius: 50%; border: 2px solid #8B7CFF; }
+        .lg-shape.ring-b { border-radius: 50%; border: 2px solid #FF7AC8; }
+        .lg-shape.ring-c { border-radius: 50%; border: 2px solid #3EC6FF; }
+        .lg-shape.sq-a { border-radius: 16px; background: linear-gradient(135deg, #8B7CFF, #3EC6FF); opacity: 0.22; }
+        .lg-shape.sq-b { border-radius: 12px; background: linear-gradient(135deg, #FF7AC8, #FFB86B); opacity: 0.22; }
+
+        @keyframes gradient-shift { 0% { background-position: 0% 50%; } 100% { background-position: 100% 50%; } }
+        @keyframes border-flow { 0% { background-position: 0 0, 0% 50%; } 100% { background-position: 0 0, 100% 50%; } }
+        @keyframes shape-float {
+            0%   { transform: translateY(0) rotate(0deg); }
+            50%  { transform: translateY(-28px) rotate(180deg); }
+            100% { transform: translateY(0) rotate(360deg); }
+        }
+        @keyframes chip-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+        @keyframes logo-pulse {
+            0%, 100% { box-shadow: 0 0 0 8px var(--p-ring), 0 12px 40px var(--p-glow); }
+            50%      { box-shadow: 0 0 0 14px var(--p-ring), 0 12px 58px var(--p-glow); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .stApp, [class*="st-key-card_login"], .login-panel, .login-panel .brand-logo,
+            .login-feature, .lg-orb, .lg-shape { animation: none !important; }
+        }
         </style>
         """,
         unsafe_allow_html=True,
