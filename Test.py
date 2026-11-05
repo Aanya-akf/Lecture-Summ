@@ -1,7 +1,26 @@
+import html
+import os
 import time
 from datetime import datetime
+from pathlib import Path
 
 import streamlit as st
+
+# Local development: read SUPABASE_URL / SUPABASE_KEY from a .env file beside this script.
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv(Path(__file__).resolve().parent / ".env")
+except Exception:
+    pass
+
+from supabase import create_client
+
+# Optional: "Remember me" uses a browser cookie. The app still works without this package.
+try:
+    from streamlit_cookies_controller import CookieController
+except Exception:
+    CookieController = None
 
 # ------------------------------------------------------------
 # Page setup
@@ -24,15 +43,115 @@ defaults = {
     "signed_in_at": "",
     "uploaded_file_name": "",
     "processed": False,
+    "user": None,               # {"id": ..., "email": ...} once signed in
+    "auth_notice": "",          # one-time success message on the login card
+    "reset_email": "",          # email used in the forgot-password flow
+    "unconfirmed_email": "",    # shows the "resend confirmation" button
+    "pending_cookie": "",       # refresh token waiting to be saved as a cookie
+    "clear_cookie": False,
+    "bad_cookie": "",
 }
 for key, value in defaults.items():
     if key not in st.session_state:
         st.session_state[key] = value
 
 
+# The "Forgot password?" link reloads the page with ?auth=forgot (plus the current theme).
+_qp = st.query_params
+if _qp.get("auth") == "forgot":
+    st.session_state.auth_mode = "forgot"
+if _qp.get("theme") in ("dark", "light"):
+    st.session_state.dark_mode = _qp.get("theme") == "dark"
+if "auth" in _qp or "theme" in _qp:
+    st.query_params.clear()
+
+
 def go(screen: str) -> None:
     st.session_state.screen = screen
     st.rerun()
+
+
+# ------------------------------------------------------------
+# Supabase authentication
+# ------------------------------------------------------------
+def get_secret(name: str) -> str:
+    # Streamlit Cloud: app Secrets. Local: .env file / environment variables.
+    try:
+        value = st.secrets.get(name)
+        if value:
+            return str(value).strip()
+    except Exception:
+        pass
+    return os.getenv(name, "").strip()
+
+
+SUPABASE_URL = get_secret("SUPABASE_URL")
+SUPABASE_KEY = get_secret("SUPABASE_KEY")  # publishable / anon key only
+APP_URL = get_secret("APP_URL")            # optional: where confirmation emails send people
+
+if not SUPABASE_URL or not SUPABASE_KEY:
+    st.error(
+        "Supabase credentials are missing. Add SUPABASE_URL and SUPABASE_KEY to your .env file "
+        "(local) or to the app's Secrets (Streamlit Cloud)."
+    )
+    st.stop()
+
+
+def sb():
+    # One client per browser session. A client stores its user's login, so it must never be shared.
+    if "sb_client" not in st.session_state:
+        st.session_state.sb_client = create_client(SUPABASE_URL, SUPABASE_KEY)
+    return st.session_state.sb_client
+
+
+def friendly_error(error: Exception) -> str:
+    msg = str(error).lower()
+    if "email not confirmed" in msg:
+        return "Your email isn't confirmed yet. Open the confirmation email we sent, then sign in."
+    if "invalid login credentials" in msg:
+        return "Incorrect email or password."
+    if "already registered" in msg or "already been registered" in msg:
+        return "An account with this email already exists. Sign in instead."
+    if "rate limit" in msg or "too many" in msg or "security purposes" in msg:
+        return "Too many attempts. Wait a few minutes, then try again."
+    if "expired" in msg or "otp" in msg or ("token" in msg and "invalid" in msg):
+        return "That code is invalid or has expired. Request a new one."
+    if "password" in msg and ("weak" in msg or "at least" in msg or "short" in msg):
+        return "Choose a stronger password (at least 8 characters)."
+    if "same password" in msg:
+        return "Choose a password different from your old one."
+    if "network" in msg or "connection" in msg or "timed out" in msg:
+        return "Couldn't reach the server. Check your connection and try again."
+    return f"Something went wrong: {error}"
+
+
+def display_name(user) -> str:
+    meta = getattr(user, "user_metadata", None) or {}
+    name = (meta.get("full_name") or "").strip()
+    return name or (user.email or "Student").split("@")[0]
+
+
+def start_session(session, remember: bool) -> None:
+    user = session.user
+    st.session_state.user = {"id": user.id, "email": user.email}
+    st.session_state.username = display_name(user)
+    st.session_state.signed_in_at = datetime.now().strftime("%d %b %Y, %I:%M %p")
+    if remember and CookieController is not None:
+        st.session_state.pending_cookie = session.refresh_token
+
+
+def sign_out() -> None:
+    try:
+        sb().auth.sign_out()
+    except Exception:
+        pass
+    st.session_state.pop("sb_client", None)
+    st.session_state.user = None
+    st.session_state.username = ""
+    st.session_state.processed = False
+    st.session_state.uploaded_file_name = ""
+    st.session_state.auth_mode = "signin"
+    st.session_state.clear_cookie = True
 
 
 # ------------------------------------------------------------
@@ -577,6 +696,52 @@ def show_footer() -> None:
 show_background_fx()
 
 # ------------------------------------------------------------
+# "Remember me": keep a refresh token in a cookie and restore the login on the next visit
+# ------------------------------------------------------------
+COOKIE_NAME = "lecture_ai_refresh"
+COOKIE_MAX_AGE = 60 * 60 * 24 * 30  # 30 days
+
+cookies = None
+if CookieController is not None:
+    try:
+        cookies = CookieController()
+    except Exception:
+        cookies = None
+
+_restored = False
+if cookies is not None:
+    try:
+        if st.session_state.pending_cookie:
+            cookies.set(COOKIE_NAME, st.session_state.pending_cookie, max_age=COOKIE_MAX_AGE)
+            st.session_state.pending_cookie = ""
+        if st.session_state.clear_cookie:
+            st.session_state.bad_cookie = cookies.get(COOKIE_NAME) or ""
+            cookies.remove(COOKIE_NAME)
+            st.session_state.clear_cookie = False
+        elif st.session_state.user is None:
+            saved = cookies.get(COOKIE_NAME)
+            if saved and saved != st.session_state.bad_cookie:
+                try:
+                    res = sb().auth.refresh_session(saved)
+                    if res and res.session and res.user:
+                        start_session(res.session, remember=True)
+                        _restored = True
+                except Exception:
+                    st.session_state.bad_cookie = saved
+                    cookies.remove(COOKIE_NAME)
+    except Exception:
+        pass
+if _restored:
+    st.session_state.screen = "upload"
+    st.rerun()
+
+# Route guard: the workspace is only for signed-in users
+if st.session_state.user is None and st.session_state.screen != "login":
+    st.session_state.screen = "login"
+elif st.session_state.user is not None and st.session_state.screen == "login":
+    st.session_state.screen = "upload"
+
+# ------------------------------------------------------------
 # Sidebar: theme toggle and navigation
 # ------------------------------------------------------------
 with st.sidebar:
@@ -611,10 +776,7 @@ with st.sidebar:
         if st.button("📄  View results", use_container_width=True):
             go("results" if st.session_state.processed else "upload")
         if st.button("🚪  Log out", use_container_width=True):
-            st.session_state.username = ""
-            st.session_state.processed = False
-            st.session_state.uploaded_file_name = ""
-            st.session_state.auth_mode = "signin"
+            sign_out()
             go("login")
 
     st.markdown("---")
@@ -744,18 +906,26 @@ if st.session_state.screen == "login":
             )
 
         with form_col:
-            if st.session_state.auth_mode == "signin":
+            if st.session_state.auth_notice:
+                st.success(st.session_state.auth_notice)
+                st.session_state.auth_notice = ""
+
+            mode = st.session_state.auth_mode
+
+            # ---------------- Sign in ----------------
+            if mode == "signin":
                 st.markdown('<div class="section-title">Welcome back</div>', unsafe_allow_html=True)
                 st.markdown(
                     '<div class="section-subtitle">Sign in to open your personal lecture workspace.</div>',
                     unsafe_allow_html=True,
                 )
 
+                theme_q = "dark" if st.session_state.dark_mode else "light"
                 with st.form("login_form"):
-                    username = st.text_input("Username or email", placeholder="e.g. ashutosh@example.com")
+                    email = st.text_input("Email", placeholder="you@example.com")
                     st.markdown(
                         '<div class="field-row"><span class="lbl">Password</span>'
-                        '<a href="#">Forgot password?</a></div>',
+                        f'<a href="?auth=forgot&theme={theme_q}" target="_self">Forgot password?</a></div>',
                         unsafe_allow_html=True,
                     )
                     password = st.text_input(
@@ -764,23 +934,46 @@ if st.session_state.screen == "login":
                         placeholder="Enter your password",
                         label_visibility="collapsed",
                     )
-                    st.checkbox("Remember me", value=True)
+                    remember = st.checkbox("Remember me", value=True)
                     submitted = st.form_submit_button("Sign in  →", type="primary", use_container_width=True)
 
                 if submitted:
-                    if username.strip() and password:
-                        st.session_state.username = username.strip().split("@")[0]
-                        st.session_state.signed_in_at = datetime.now().strftime("%d %b %Y, %I:%M %p")
-                        go("upload")
+                    if not email.strip() or not password:
+                        st.error("Enter both your email and password to continue.")
                     else:
-                        st.error("Enter both a username/email and a password to continue.")
+                        signed_in = False
+                        try:
+                            res = sb().auth.sign_in_with_password(
+                                {"email": email.strip().lower(), "password": password}
+                            )
+                            if res.session and res.user:
+                                st.session_state.unconfirmed_email = ""
+                                start_session(res.session, remember)
+                                signed_in = True
+                            else:
+                                st.error("Sign-in didn't return a session. Check the account in Supabase.")
+                        except Exception as error:
+                            if "email not confirmed" in str(error).lower():
+                                st.session_state.unconfirmed_email = email.strip().lower()
+                            st.error(friendly_error(error))
+                        if signed_in:
+                            go("upload")
+
+                if st.session_state.unconfirmed_email:
+                    if st.button("Resend confirmation email", key="switch_resend_confirm"):
+                        try:
+                            sb().auth.resend({"type": "signup", "email": st.session_state.unconfirmed_email})
+                            st.success("Confirmation email sent. Check your inbox and spam folder.")
+                        except Exception as error:
+                            st.error(friendly_error(error))
 
                 st.markdown('<div class="switch-line">Don\'t have an account?</div>', unsafe_allow_html=True)
                 if st.button("Create one", key="switch_to_signup", use_container_width=True):
                     st.session_state.auth_mode = "signup"
                     st.rerun()
 
-            else:
+            # ---------------- Create account ----------------
+            elif mode == "signup":
                 st.markdown('<div class="section-title">Create your account</div>', unsafe_allow_html=True)
                 st.markdown(
                     '<div class="section-subtitle">Set up your lecture workspace in a few seconds.</div>',
@@ -790,22 +983,141 @@ if st.session_state.screen == "login":
                 with st.form("signup_form"):
                     new_name = st.text_input("Full name", placeholder="e.g. Ashutosh Verma")
                     new_email = st.text_input("Email", placeholder="you@example.com")
-                    new_password = st.text_input("Password", type="password", placeholder="Choose a password")
+                    new_password = st.text_input("Password", type="password", placeholder="At least 8 characters")
                     new_confirm = st.text_input("Confirm password", type="password", placeholder="Repeat your password")
                     created = st.form_submit_button("Create account  →", type="primary", use_container_width=True)
 
                 if created:
                     if not (new_name.strip() and new_email.strip() and new_password):
                         st.error("Fill in your name, email, and a password to continue.")
+                    elif len(new_password) < 8:
+                        st.error("Use a password with at least 8 characters.")
                     elif new_password != new_confirm:
                         st.error("The passwords don't match. Re-enter them and try again.")
                     else:
-                        st.session_state.username = new_name.strip().split()[0]
-                        st.session_state.signed_in_at = datetime.now().strftime("%d %b %Y, %I:%M %p")
-                        go("upload")
+                        next_step = ""
+                        try:
+                            options = {"data": {"full_name": new_name.strip()}}
+                            if APP_URL:
+                                options["email_redirect_to"] = APP_URL
+                            res = sb().auth.sign_up(
+                                {
+                                    "email": new_email.strip().lower(),
+                                    "password": new_password,
+                                    "options": options,
+                                }
+                            )
+                            if res.session and res.user:
+                                start_session(res.session, remember=True)
+                                next_step = "workspace"
+                            elif res.user and not getattr(res.user, "identities", None):
+                                st.error("An account with this email already exists. Sign in instead.")
+                            else:
+                                next_step = "confirm"
+                        except Exception as error:
+                            st.error(friendly_error(error))
+                        if next_step == "workspace":
+                            go("upload")
+                        elif next_step == "confirm":
+                            st.session_state.auth_mode = "signin"
+                            st.session_state.auth_notice = (
+                                "Account created. Open the confirmation email we sent, then sign in."
+                            )
+                            st.rerun()
 
                 st.markdown('<div class="switch-line">Already have an account?</div>', unsafe_allow_html=True)
                 if st.button("Sign in", key="switch_to_signin", use_container_width=True):
+                    st.session_state.auth_mode = "signin"
+                    st.rerun()
+
+            # ---------------- Forgot password: ask for email ----------------
+            elif mode == "forgot":
+                st.markdown('<div class="section-title">Reset your password</div>', unsafe_allow_html=True)
+                st.markdown(
+                    '<div class="section-subtitle">Enter your account email and we\'ll send you a one-time code.</div>',
+                    unsafe_allow_html=True,
+                )
+
+                with st.form("forgot_form"):
+                    forgot_email = st.text_input("Email", placeholder="you@example.com")
+                    send_code = st.form_submit_button("Send reset code  →", type="primary", use_container_width=True)
+
+                if send_code:
+                    if not forgot_email.strip():
+                        st.error("Enter your email address.")
+                    else:
+                        sent = False
+                        try:
+                            sb().auth.reset_password_for_email(forgot_email.strip().lower())
+                            sent = True
+                        except Exception as error:
+                            st.error(friendly_error(error))
+                        if sent:
+                            st.session_state.reset_email = forgot_email.strip().lower()
+                            st.session_state.auth_mode = "reset"
+                            st.session_state.auth_notice = (
+                                "If an account exists for that email, a code is on its way. "
+                                "Check your inbox and spam folder."
+                            )
+                            st.rerun()
+
+                if st.button("← Back to sign in", key="switch_back_from_forgot", use_container_width=True):
+                    st.session_state.auth_mode = "signin"
+                    st.rerun()
+
+            # ---------------- Forgot password: code + new password ----------------
+            elif mode == "reset":
+                safe_email = html.escape(st.session_state.reset_email)
+                st.markdown('<div class="section-title">Enter your code</div>', unsafe_allow_html=True)
+                st.markdown(
+                    f'<div class="section-subtitle">Use the code sent to {safe_email} and choose a new password.</div>',
+                    unsafe_allow_html=True,
+                )
+
+                with st.form("reset_form"):
+                    reset_code = st.text_input("Code from email", placeholder="123456", max_chars=10)
+                    reset_password = st.text_input("New password", type="password", placeholder="At least 8 characters")
+                    reset_confirm = st.text_input("Confirm new password", type="password", placeholder="Repeat your password")
+                    reset_submitted = st.form_submit_button("Update password  →", type="primary", use_container_width=True)
+
+                if reset_submitted:
+                    if not reset_code.strip() or not reset_password:
+                        st.error("Enter the code from your email and a new password.")
+                    elif len(reset_password) < 8:
+                        st.error("Use a password with at least 8 characters.")
+                    elif reset_password != reset_confirm:
+                        st.error("The passwords don't match. Re-enter them and try again.")
+                    else:
+                        updated = False
+                        try:
+                            sb().auth.verify_otp(
+                                {
+                                    "email": st.session_state.reset_email,
+                                    "token": reset_code.strip(),
+                                    "type": "recovery",
+                                }
+                            )
+                            sb().auth.update_user({"password": reset_password})
+                            updated = True
+                        except Exception as error:
+                            st.error(friendly_error(error))
+                        if updated:
+                            try:
+                                sb().auth.sign_out()
+                            except Exception:
+                                pass
+                            st.session_state.pop("sb_client", None)
+                            st.session_state.auth_mode = "signin"
+                            st.session_state.auth_notice = "Password updated. Sign in with your new password."
+                            st.rerun()
+
+                if st.button("Send a new code", key="switch_resend_code"):
+                    try:
+                        sb().auth.reset_password_for_email(st.session_state.reset_email)
+                        st.success("A new code is on its way.")
+                    except Exception as error:
+                        st.error(friendly_error(error))
+                if st.button("← Back to sign in", key="switch_back_from_reset", use_container_width=True):
                     st.session_state.auth_mode = "signin"
                     st.rerun()
 
