@@ -7,12 +7,29 @@ from pathlib import Path
 import streamlit as st
 
 # Local development: read SUPABASE_URL / SUPABASE_KEY from a .env file beside this script.
-try:
-    from dotenv import load_dotenv
+ENV_PATH = Path(__file__).resolve().parent / ".env"
 
-    load_dotenv(Path(__file__).resolve().parent / ".env")
-except Exception:
-    pass
+
+def load_env_file(path: Path) -> None:
+    # Small .env reader: handles quotes, comments, "export" and the BOM that Notepad can add.
+    try:
+        text = path.read_text(encoding="utf-8-sig")
+    except Exception:
+        return
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key = key.strip()
+        if key.startswith("export "):
+            key = key[len("export "):].strip()
+        value = value.strip().strip('"').strip("'")
+        if key and value:
+            os.environ.setdefault(key, value)
+
+
+load_env_file(ENV_PATH)
 
 from supabase import create_client
 
@@ -94,6 +111,10 @@ if not SUPABASE_URL or not SUPABASE_KEY:
         "Supabase credentials are missing. Add SUPABASE_URL and SUPABASE_KEY to your .env file "
         "(local) or to the app's Secrets (Streamlit Cloud)."
     )
+    st.caption(
+        f"Looked for a .env file at: {ENV_PATH} ({'found' if ENV_PATH.exists() else 'not found'}). "
+        f"SUPABASE_URL: {'set' if SUPABASE_URL else 'missing'}, SUPABASE_KEY: {'set' if SUPABASE_KEY else 'missing'}."
+    )
     st.stop()
 
 
@@ -172,6 +193,11 @@ if st.session_state.dark_mode:
     TILE_SHADOW = "0 6px 18px rgba(0, 0, 0, 0.30)"
     TITLE_A, TITLE_B = "#FFFFFF", "#C9C2FF"
     GOOD = "#5FD39A"
+    BTN_BG, BTN_BORDER, BTN_BORDER_W = SURFACE, BORDER, "1px"
+    BTN_TEXT, BTN_SHADOW, BTN_HOVER_BG = TEXT, TILE_SHADOW, SURFACE
+    PRIMARY_BG = "linear-gradient(135deg, #8B7CFF 0%, #6C5CE7 100%)"
+    PRIMARY_SHADOW = f"0 8px 22px {GLOW}"
+    PRIMARY_SHADOW_HOVER = f"0 12px 28px {GLOW}"
     P = dict(
         bg="linear-gradient(160deg, #141C33 0%, #2B2377 55%, #5443D6 100%)",
         border="rgba(255, 255, 255, 0.10)", text="#DCDFF5", muted="#B8BCE0", sub="#C9CDEB",
@@ -195,6 +221,14 @@ else:
     TILE_SHADOW = "0 4px 14px rgba(24, 36, 58, 0.07)"
     TITLE_A, TITLE_B = "#18243A", "#4B3FC4"
     GOOD = "#1F9D68"
+    # Light mode: strong navy outline + firm shadow on secondary buttons, deep violet primaries
+    BTN_BG, BTN_BORDER, BTN_BORDER_W = "#FFFFFF", "rgba(24, 36, 58, 0.62)", "1.5px"
+    BTN_TEXT = "#18243A"
+    BTN_SHADOW = "0 3px 0 rgba(24, 36, 58, 0.18), 0 8px 18px rgba(24, 36, 58, 0.10)"
+    BTN_HOVER_BG = "#F0EDFF"
+    PRIMARY_BG = "linear-gradient(135deg, #5B49E0 0%, #3E2FB5 100%)"
+    PRIMARY_SHADOW = "0 4px 0 #2C2090, 0 12px 26px rgba(62, 47, 181, 0.38)"
+    PRIMARY_SHADOW_HOVER = "0 5px 0 #2C2090, 0 16px 30px rgba(62, 47, 181, 0.45)"
     P = dict(
         bg="linear-gradient(160deg, #F6F3FF 0%, #E3DCFF 55%, #CDC2FF 100%)",
         border="rgba(108, 92, 231, 0.25)", text="#2A2F52", muted="#4F5680", sub="#4F5680",
@@ -222,6 +256,15 @@ theme_vars = f"""
     --title-b: {TITLE_B};
     --card-shadow: {CARD_SHADOW};
     --tile-shadow: {TILE_SHADOW};
+    --btn-bg: {BTN_BG};
+    --btn-border: {BTN_BORDER};
+    --btn-border-w: {BTN_BORDER_W};
+    --btn-text: {BTN_TEXT};
+    --btn-shadow: {BTN_SHADOW};
+    --btn-hover-bg: {BTN_HOVER_BG};
+    --primary-bg: {PRIMARY_BG};
+    --primary-shadow: {PRIMARY_SHADOW};
+    --primary-shadow-hover: {PRIMARY_SHADOW_HOVER};
     --p-bg: {P["bg"]};
     --p-border: {P["border"]};
     --p-text: {P["text"]};
@@ -322,6 +365,63 @@ hr {
     100% { transform: translateY(-105vh); opacity: 0; }
 }
 
+/* ---------- More ambient motion (all very low opacity) ---------- */
+.bg-orb2 {
+    position: absolute;
+    right: -140px;
+    bottom: -160px;
+    width: 460px;
+    height: 460px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 60% 40%, #4DA3FF 0%, rgba(108, 92, 231, 0.45) 45%, transparent 70%);
+    filter: blur(90px);
+    opacity: 0.16;
+    animation: orb-drift-2 34s ease-in-out infinite alternate;
+}
+.bg-bubble {
+    position: absolute;
+    bottom: -70px;
+    border-radius: 50%;
+    border: 1.5px solid var(--accent);
+    background: radial-gradient(circle at 30% 30%, var(--glow), transparent 65%);
+    opacity: 0;
+    animation: bubble-rise linear infinite;
+}
+.bg-spark {
+    position: absolute;
+    width: 3px;
+    height: 3px;
+    border-radius: 50%;
+    background: var(--accent);
+    opacity: 0;
+    animation: twinkle 6s ease-in-out infinite;
+}
+.bg-wave {
+    position: absolute;
+    left: 0;
+    color: var(--accent);
+    max-width: none;
+}
+.bg-wave-a { bottom: 4%; height: 80px; opacity: 0.14; animation: wave-scroll 38s linear infinite; }
+.bg-wave-b { bottom: 13%; height: 54px; opacity: 0.08; animation: wave-scroll-rev 52s linear infinite; }
+@keyframes orb-drift-2 {
+    0%   { transform: translate(0, 0) scale(1); }
+    100% { transform: translate(-60px, -50px) scale(1.12); }
+}
+@keyframes bubble-rise {
+    0%   { transform: translate(0, 0) scale(0.9); opacity: 0; }
+    10%  { opacity: 0.45; }
+    50%  { transform: translate(var(--sway), -55vh) scale(1); }
+    90%  { opacity: 0.3; }
+    100% { transform: translate(calc(var(--sway) * -0.6), -115vh) scale(1.05); opacity: 0; }
+}
+@keyframes twinkle {
+    0%, 100% { opacity: 0; transform: scale(0.6); }
+    50%      { opacity: 0.55; transform: scale(1.4); }
+}
+@keyframes wave-scroll     { from { transform: translateX(0); }      to { transform: translateX(-400px); } }
+@keyframes wave-scroll-rev { from { transform: translateX(-400px); } to { transform: translateX(0); } }
+
 /* ---------- Brand ---------- */
 .brand {
     display: flex;
@@ -335,15 +435,15 @@ hr {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 70px;
-    height: 70px;
+    width: 64px;
+    height: 64px;
     flex-shrink: 0;
-    border-radius: 50%;
-    font-size: 32px;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    box-shadow: 0 0 0 6px var(--glow), 0 0 34px 6px var(--glow);
+    border-radius: 20px;
+    background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    box-shadow: 0 0 0 6px var(--glow), 0 10px 30px var(--glow);
 }
+.brand-logo svg { width: 58%; height: 58%; display: block; }
 .brand-title {
     margin: 0;
     font-size: clamp(1.8rem, 4vw, 2.6rem);
@@ -527,25 +627,26 @@ hr {
 [data-testid="stRadio"] label,
 [data-testid="stCheckbox"] label { color: var(--text) !important; }
 
-/* ---------- Buttons: secondary = outlined surface, primary = solid violet ---------- */
+/* ---------- Buttons: secondary = outlined, primary = solid violet ---------- */
 .stButton > button,
 [data-testid="stFormSubmitButton"] > button,
 .stDownloadButton > button,
 [data-testid="stFileUploader"] button {
-    border: 1px solid var(--border) !important;
+    border: var(--btn-border-w) solid var(--btn-border) !important;
     border-radius: 14px !important;
     padding: 0.7rem 1.2rem;
     font-weight: 700;
-    color: var(--text) !important;
-    background: var(--surface) !important;
-    box-shadow: var(--tile-shadow) !important;
-    transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+    color: var(--btn-text) !important;
+    background: var(--btn-bg) !important;
+    box-shadow: var(--btn-shadow) !important;
+    transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease, background 0.15s ease;
 }
 .stButton > button:hover,
 .stDownloadButton > button:hover,
 [data-testid="stFileUploader"] button:hover {
     border-color: var(--accent) !important;
     color: var(--accent) !important;
+    background: var(--btn-hover-bg) !important;
 }
 .stButton > button:focus-visible,
 [data-testid="stFormSubmitButton"] > button:focus-visible,
@@ -554,22 +655,32 @@ hr {
     outline-offset: 3px;
 }
 
+.stButton > button[kind="primary"],
+.stButton > button[data-testid="stBaseButton-primary"],
+[data-testid="stFormSubmitButton"] > button[kind="primaryFormSubmit"],
+[data-testid="stFormSubmitButton"] > button[data-testid="stBaseButton-primaryFormSubmit"],
 button[kind="primary"],
 button[kind="primaryFormSubmit"],
 [data-testid="stBaseButton-primary"],
 [data-testid="stBaseButton-primaryFormSubmit"] {
-    background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%) !important;
+    background: var(--primary-bg) !important;
     color: #FFFFFF !important;
     border: 1px solid transparent !important;
-    box-shadow: 0 8px 22px var(--glow) !important;
+    box-shadow: var(--primary-shadow) !important;
 }
+.stButton > button[kind="primary"]:hover,
+.stButton > button[data-testid="stBaseButton-primary"]:hover,
+[data-testid="stFormSubmitButton"] > button[kind="primaryFormSubmit"]:hover,
+[data-testid="stFormSubmitButton"] > button[data-testid="stBaseButton-primaryFormSubmit"]:hover,
 button[kind="primary"]:hover,
 button[kind="primaryFormSubmit"]:hover,
 [data-testid="stBaseButton-primary"]:hover,
 [data-testid="stBaseButton-primaryFormSubmit"]:hover {
+    background: var(--primary-bg) !important;
     color: #FFFFFF !important;
+    border-color: transparent !important;
     transform: translateY(-1px);
-    box-shadow: 0 12px 28px var(--glow) !important;
+    box-shadow: var(--primary-shadow-hover) !important;
 }
 button[kind="primary"] p,
 button[kind="primaryFormSubmit"] p,
@@ -594,7 +705,8 @@ button[kind="primaryFormSubmit"] p,
     font-weight: 700;
 }
 [class*="st-key-switch_"] button p { color: var(--accent) !important; }
-[class*="st-key-switch_"] button:hover { text-decoration: underline; transform: none; }
+[class*="st-key-switch_"] button { text-decoration: underline; text-underline-offset: 3px; }
+[class*="st-key-switch_"] button:hover { transform: none; }
 
 /* ---------- Alerts ---------- */
 [data-testid="stAlert"] {
@@ -622,6 +734,39 @@ button[kind="primaryFormSubmit"] p,
 [data-baseweb="tab-highlight"] { background-color: var(--accent) !important; height: 3px; border-radius: 3px; }
 [data-baseweb="tab-border"] { background-color: var(--border) !important; }
 
+/* ---------- Streamlit's own icons: force readable colours ---------- */
+/* Its default theme can give icons a light colour that vanishes on our light surfaces
+   (password eye, sidebar arrow, header buttons, uploader icons). */
+[data-testid="stIconMaterial"] { color: var(--text) !important; }
+[data-testid="stTextInputRootElement"] button,
+[data-testid="stTextInputRootElement"] button *,
+[data-testid="stTextInputRootElement"] svg,
+[data-testid="stTextInputRootElement"] svg * {
+    color: var(--text) !important;
+    fill: currentColor !important;
+    opacity: 1 !important;
+}
+[data-testid="stTextInputRootElement"] input {
+    caret-color: var(--text);
+    -webkit-text-fill-color: var(--text) !important;
+}
+[data-testid="stExpandSidebarButton"],
+[data-testid="collapsedControl"],
+[data-testid="stSidebarCollapseButton"] button {
+    background: var(--surface) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 12px !important;
+    box-shadow: var(--tile-shadow);
+}
+[data-testid="stExpandSidebarButton"] *,
+[data-testid="collapsedControl"] *,
+[data-testid="stSidebarCollapseButton"] *,
+[data-testid="stHeader"] button,
+[data-testid="stHeader"] button * {
+    color: var(--text) !important;
+    fill: currentColor !important;
+}
+
 /* ---------- Footer ---------- */
 .footer {
     text-align: center;
@@ -631,7 +776,7 @@ button[kind="primaryFormSubmit"] p,
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .bg-orb, .bg-particle, .wave span, .doc i { animation: none !important; }
+    .bg-orb, .bg-orb2, .bg-particle, .bg-bubble, .bg-spark, .bg-wave, .wave span, .doc i { animation: none !important; }
     .wave span { transform: scaleY(0.6); }
 }
 """
@@ -647,8 +792,16 @@ def card(name: str):
     return st.container(key=f"card_{name}")
 
 
+def _wave_path(amp: int, period: int = 100, width: int = 4400, y: int = 40) -> str:
+    half = period // 2
+    d = f"M0 {y} Q{half // 2} {y - amp} {half} {y}"
+    d += "".join(f" T{half * (i + 2)} {y}" for i in range(width // half - 1))
+    return d
+
+
 def show_background_fx() -> None:
-    """Very subtle: one drifting gradient orb and a handful of tiny rising particles."""
+    # Very subtle: two drifting gradient orbs, tiny rising particles, soft bubbles,
+    # a few twinkles and two slow audio-wave lines along the bottom.
     particles = "".join(
         f'<span class="bg-particle" style="left:{left}%;animation-duration:{dur}s;animation-delay:{delay}s;"></span>'
         for left, dur, delay in [
@@ -656,7 +809,40 @@ def show_background_fx() -> None:
             (58, 44, 15), (68, 40, 4), (77, 35, 11), (86, 45, 7), (94, 39, 14),
         ]
     )
-    st.markdown(f'<div class="bg-fx"><div class="bg-orb"></div>{particles}</div>', unsafe_allow_html=True)
+    bubbles = "".join(
+        f'<span class="bg-bubble" style="left:{left}%;width:{size}px;height:{size}px;'
+        f'animation-duration:{dur}s;animation-delay:{delay}s;--sway:{sway}px;"></span>'
+        for left, size, dur, delay, sway in [
+            (6, 22, 38, 0, 40), (14, 40, 52, 8, -60), (24, 16, 34, 15, 30), (36, 52, 60, 4, 50),
+            (47, 20, 40, 20, -35), (58, 34, 55, 11, 45), (66, 14, 32, 2, -25), (75, 46, 64, 18, -55),
+            (84, 24, 42, 7, 35), (93, 18, 36, 13, -30),
+        ]
+    )
+    sparks = "".join(
+        f'<span class="bg-spark" style="left:{left}%;top:{top}%;animation-delay:{delay}s;"></span>'
+        for left, top, delay in [(12, 18, 0), (30, 70, 2), (52, 12, 4), (68, 60, 1.5), (82, 25, 3), (90, 78, 5), (20, 45, 6)]
+    )
+    waves = (
+        f'<svg class="bg-wave bg-wave-a" viewBox="0 0 4400 80" width="4400" height="80" preserveAspectRatio="none">'
+        f'<path d="{_wave_path(26)}" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>'
+        f'<svg class="bg-wave bg-wave-b" viewBox="0 0 4400 80" width="4400" height="80" preserveAspectRatio="none">'
+        f'<path d="{_wave_path(16)}" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>'
+    )
+    st.markdown(
+        f'<div class="bg-fx"><div class="bg-orb"></div><div class="bg-orb2"></div>{waves}{bubbles}{sparks}{particles}</div>',
+        unsafe_allow_html=True,
+    )
+
+
+# Simple line-art mortarboard, white on a violet badge
+LOGO_SVG = (
+    '<svg viewBox="0 0 48 48" fill="none" stroke="#FFFFFF" stroke-width="2.8" '
+    'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+    '<path d="M4 18 24 8l20 10-20 10L4 18Z"/>'
+    '<path d="M12 23.5V32c0 3 5.4 6 12 6s12-3 12-6v-8.5"/>'
+    '<path d="M44 18v12"/>'
+    "</svg>"
+)
 
 
 def waveform_html() -> str:
@@ -674,7 +860,7 @@ def show_brand() -> None:
     st.markdown(
         f"""
         <div class="brand">
-            <div class="brand-logo">🎓</div>
+            <div class="brand-logo">{LOGO_SVG}</div>
             <div>
                 <div class="brand-title"><span class="lec">Lecture</span> <span class="ai">AI</span></div>
                 <div class="brand-subtitle">Your lecture, simplified.</div>
@@ -788,7 +974,7 @@ if st.session_state.screen == "login":
     st.markdown(
         """
         <style>
-        .block-container { padding-top: 3.5rem !important; padding-bottom: 0.5rem !important; max-width: 1000px; }
+        .block-container { padding-top: 2.2rem !important; padding-bottom: 0.5rem !important; max-width: 1000px; }
         [class*="st-key-card_login"] { padding: 14px !important; gap: 0.6rem; }
         [class*="st-key-card_login"] [data-testid="stHorizontalBlock"] { align-items: stretch; gap: 1.2rem; margin: 0 !important; }
 
@@ -835,10 +1021,10 @@ if st.session_state.screen == "login":
             gap: 18px;
         }
         .login-panel .brand-logo {
-            width: 84px; height: 84px; font-size: 40px;
-            background: var(--p-logo-bg);
-            border: 1px solid var(--p-logo-border);
-            box-shadow: 0 0 0 8px var(--p-ring), 0 0 44px 10px var(--p-glow);
+            width: 80px; height: 80px; border-radius: 24px;
+            background: linear-gradient(135deg, #8B7CFF 0%, #5443D6 100%);
+            border: 1px solid rgba(255, 255, 255, 0.40);
+            box-shadow: 0 0 0 8px var(--p-ring), 0 12px 40px var(--p-glow);
         }
         .login-panel .brand-title { font-size: 2.5rem; }
         .login-panel .brand-title .lec {
@@ -886,7 +1072,7 @@ if st.session_state.screen == "login":
                 f"""
                 <div class="login-panel">
                     <div class="brand">
-                        <div class="brand-logo">🎓</div>
+                        <div class="brand-logo">{LOGO_SVG}</div>
                         <div>
                             <div class="brand-title"><span class="lec">Lecture</span> <span class="ai">AI</span></div>
                             <div class="brand-subtitle">Your lecture, simplified.</div>
