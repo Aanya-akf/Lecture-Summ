@@ -25,7 +25,6 @@ so they stay private.
 - **Upload lecture recordings** (audio or video) of up to 1 GB
 - **See your recent lectures** on the dashboard, even after you log out
 - **Switch between light and dark mode**
-- **See times in Indian Standard Time (IST)**
 
 ## Supported file types
 
