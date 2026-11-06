@@ -1,116 +1,98 @@
 # Lecture AI
 
-A Streamlit web app for turning lecture recordings into transcripts and summaries. Students sign in, upload an audio or video recording straight from the browser to their own Google Drive, and track their recent lectures from a themed dashboard.
+Lecture AI is a web app that helps students turn lecture recordings into
+transcripts and summaries.
 
-> **Status:** Sign-in, uploading and lecture history are fully working. The transcription and summary step is still a placeholder: the Results screen shows sample text, not real output from your recording.
+You sign in, upload a recording of your lecture, and the app keeps track of
+everything on a simple dashboard. Your files are saved to your own Google Drive,
+so they stay private.
 
-## Features
+> **Current status:** Sign-in, uploading and the dashboard all work.
+> Automatic transcripts and summaries are still being built, so the Results
+> page shows sample text for now.
 
-- **Accounts:** email and password sign-up, sign-in, "Remember me" (30-day cookie), email confirmation and one-time-code password reset, all through Supabase Auth.
-- **Direct-to-Drive uploads:** files go from the browser to Google Drive in 8 MB chunks, with up to 3 retries per chunk. Files never pass through the Streamlit server.
-- **Large files:** up to 1 GB per recording.
-- **Supported formats:** MP3, WAV, M4A, MP4, MKV, WEBM, OGG, MPEG, AVI, MOV, M4V, MPG, 3GP, FLAC, AAC, OPUS.
-- **Lecture history:** the five most recent uploads are loaded from the database, so they persist across refreshes, logouts and devices.
-- **Dashboard:** current lecture, pipeline progress ring, study tips and account card.
-- **Light and dark themes:** the custom upload component follows the app's theme.
-- **Times in IST:** all displayed times use Asia/Kolkata.
+## Who is it for?
+
+- Students who record their classes and want them organised in one place
+- Anyone who wants notes from long lectures without re-watching them
+- Study groups who want a simple way to keep their recordings safe
+
+## What you can do
+
+- **Create an account** and sign in with your email and password
+- **Stay signed in** on your device if you choose "Remember me"
+- **Reset your password** by email if you forget it
+- **Upload lecture recordings** (audio or video) of up to 1 GB
+- **See your recent lectures** on the dashboard, even after you log out
+- **Switch between light and dark mode**
+- **See times in Indian Standard Time (IST)**
+
+## Supported file types
+
+| Type  | Formats                                       |
+| ----- | --------------------------------------------- |
+| Audio | MP3, WAV, M4A, OGG, FLAC, AAC, OPUS           |
+| Video | MP4, MKV, WEBM, MOV, AVI, MPEG, MPG, M4V, 3GP |
 
 ## How it works
 
-```
-Browser ──► Streamlit app (Test.py)
-   │             │
-   │             ├── Supabase Auth (sign-in, session token)
-   │             └── Supabase DB (lecture_uploads history)
-   │
-   └─► Custom upload component (Vite + JS)
-          1. start-upload    ─► Supabase Edge Function ─► Google Drive resumable session
-          2. PUT chunks      ─► Google Drive (direct)
-          3. complete-upload ─► Supabase Edge Function (verifies and records the file)
-```
+Here is the journey of a lecture, in plain steps:
 
-The Streamlit app passes the user's access token and the edge function URL to the upload component. The component then runs the three steps above.
+1. **You sign in.** The app checks who you are.
+2. **You pick a recording.** The app checks that it is a supported type and
+   not bigger than 1 GB.
+3. **The upload starts.** Your file is sent in small pieces straight from your
+   browser to your Google Drive. If a piece fails, the app tries again.
+4. **The upload is confirmed.** The app checks that the whole file arrived.
+5. **It shows up on your dashboard** under "Recent lectures".
 
-## Project structure
+Because the file goes directly to Google Drive, the app itself never has to
+store or handle your recording.
+
+## What is inside this project
 
 ```
 Lecture-Summ/
-├── Test.py                 # Streamlit app (auth, dashboard, routing)
-├── requirements.txt        # Python dependencies
-├── .gitignore
-└── drive_uploader/         # Custom Streamlit component (Vite)
-    ├── index.html
-    ├── package.json
-    ├── vite.config.js
-    ├── public/
-    ├── src/
-    │   ├── main.js         # Upload logic and theme bridge
-    │   └── style.css
-    └── build/              # Built output that Streamlit actually serves (commit this)
-        ├── index.html
-        └── assets/
+├── Test.py              The main app (screens, sign-in, dashboard)
+├── requirements.txt     Python packages the app needs
+└── drive_uploader/      The upload box shown on the page
+    ├── src/             The upload box's code and styling
+    ├── public/          Small images and icons
+    └── build/           The ready-to-use version of the upload box
 ```
 
-## Requirements
+- **`Test.py`** draws every screen, handles signing in and out, and shows
+  your recent lectures.
+- **`drive_uploader/`** makes the upload box. It is written in JavaScript and
+  "built" into the `build/` folder, which is the part the app actually uses.
 
-- Python 3.9 or newer
-- Node.js 18 or newer (only to rebuild the upload component)
-- A Supabase project with:
-  - Auth enabled
-  - A `lecture_uploads` table with `file_name`, `size_bytes`, `status` and `created_at` columns
-  - An edge function named `google-drive-upload` that handles the actions `start-upload`, `complete-upload` and `prepare-upload`
-- A Google Cloud project with the Drive API enabled, used by the edge function
+## Built with
 
-## Setup
+- **Streamlit** for the web pages, written in Python
+- **Vite and JavaScript** for the upload box
+- **Supabase** for accounts and your lecture list
+- **Google Drive** for storing your recordings
 
-### 1. Clone and install
+## Running it on your computer
+
+You need Python 3.9 or newer. Node.js is only needed if you change the
+upload box.
 
 ```bash
 git clone https://github.com/<your-username>/Lecture-Summ.git
 cd Lecture-Summ
 pip install -r requirements.txt
-```
-
-`requirements.txt` should contain at least:
-
-```
-streamlit
-supabase
-streamlit-cookies-controller
-requests
-```
-
-### 2. Add your secrets
-
-For local development, create a `.env` file next to `Test.py`:
-
-```
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_KEY=your-publishable-anon-key
-APP_URL=http://localhost:8501
-```
-
-`APP_URL` is optional. It is where confirmation emails send people.
-
-On Streamlit Cloud, add the same values under **App settings → Secrets**:
-
-```toml
-SUPABASE_URL = "https://your-project.supabase.co"
-SUPABASE_KEY = "your-publishable-anon-key"
-APP_URL = "https://your-app.streamlit.app"
-```
-
-Use only the **publishable (anon) key**. Never put the service-role key in this project.
-
-### 3. Run it
-
-```bash
 streamlit run Test.py
 ```
 
-## Rebuilding the upload component
+Then open the link shown in your terminal (usually `http://localhost:8501`).
+You also need your own Supabase project and Google Drive access set up for
+everything to work.
 
-Streamlit serves the *built* component, so rebuild after any change to `main.js` or `style.css`:
+## Changing the upload box
+
+The app uses the built version, so after editing anything in
+`drive_uploader/src/`, rebuild it and upload the new `build/` folder:
 
 ```bash
 cd drive_uploader
@@ -118,40 +100,32 @@ npm install
 npm run build
 ```
 
-Then commit the updated `drive_uploader/build/` folder. Streamlit Cloud does not run `npm build` for you.
+## Putting it online
 
-Make sure `vite.config.js` sets `base: './'` and `build.outDir` to `'build'`, otherwise the component loads blank inside Streamlit.
+1. Upload the project to GitHub, including the `build/` folder.
+2. Go to [share.streamlit.io](https://share.streamlit.io) and make a new app.
+3. Pick this project, choose the `main` branch, and set the main file to
+   `Test.py`.
+4. Press **Deploy**.
 
-## Deploying to Streamlit Cloud
+After pushing changes later, restart the app from the **Manage app** menu.
 
-1. Push the repo to GitHub, including `drive_uploader/build/`.
-2. Go to [share.streamlit.io](https://share.streamlit.io) and create a new app.
-3. Choose the repo, branch `main`, and set the main file path to `Test.py`.
-4. Add your secrets under **Advanced settings → Secrets**.
-5. Deploy. After later pushes, reboot the app from **Manage app**.
+## Common problems
 
-## Troubleshooting
+| Problem                    | What to try                                  |
+| -------------------------- | -------------------------------------------- |
+| The upload box is blank    | Run `npm run build` and upload `build/` again |
+| It says my session expired | Log out and sign in again                    |
+| The time looks wrong       | Make sure you have the latest `Test.py`      |
+| Changes do not show up     | Restart the app and refresh the page         |
+| A big upload fails         | Check your internet and try again            |
 
-| Problem | Likely cause |
-| --- | --- |
-| Upload box is blank | `base: './'` missing in `vite.config.js`, or `build/` was not committed |
-| "Supabase credentials are missing" | `SUPABASE_URL` or `SUPABASE_KEY` not set in `.env` or Secrets |
-| "Your login session has expired" | The access token expired. Sign out and sign in again |
-| Upload fails at the last chunk | Google Drive blocked the response (CORS or network). Check the edge function's allowed origins |
-| Times look 5.5 hours off | An old copy of `Test.py` without the IST conversion is deployed |
-| Changes to the upload box don't appear | `npm run build` was not re-run, or the new `build/` was not pushed |
+## Coming soon
 
-## Tech stack
-
-Streamlit, Supabase (Auth, Postgres, Edge Functions), Google Drive API, Vite, `streamlit-component-lib`.
-
-## Roadmap
-
-- Real audio extraction and speech-to-text
-- AI-generated summaries and key points
-- Saved results per lecture
-- Showing past lectures' results from history
+- Turning speech into text (transcripts)
+- Short summaries and key points
+- Saved results for every lecture
 
 ## License
 
-Add your preferred license here (for example MIT).
+To be added.
