@@ -52,7 +52,7 @@ store or handle your recording.
 
 ```
 Lecture-Summ/
-├── Test.py              The main app (screens, sign-in, dashboard)
+├── Lecture_Main.py              The main app (screens, sign-in, dashboard)
 ├── requirements.txt     Python packages the app needs
 └── drive_uploader/      The upload box shown on the page
     ├── src/             The upload box's code and styling
@@ -60,7 +60,7 @@ Lecture-Summ/
     └── build/           The ready-to-use version of the upload box
 ```
 
-- **`Test.py`** draws every screen, handles signing in and out, and shows
+- **`Lecture_Main.py`** draws every screen, handles signing in and out, and shows
   your recent lectures.
 - **`drive_uploader/`** makes the upload box. It is written in JavaScript and
   "built" into the `build/` folder, which is the part the app actually uses.
@@ -81,7 +81,7 @@ upload box.
 git clone https://github.com/<your-username>/Lecture-Summ.git
 cd Lecture-Summ
 pip install -r requirements.txt
-streamlit run Test.py
+streamlit run Lecture_Main.py
 ```
 
 Then open the link shown in your terminal (usually `http://localhost:8501`).
@@ -104,7 +104,7 @@ npm run build
 1. Upload the project to GitHub, including the `build/` folder.
 2. Go to [share.streamlit.io](https://share.streamlit.io) and make a new app.
 3. Pick this project, choose the `main` branch, and set the main file to
-   `Test.py`.
+   `Lecture_Main.py`.
 4. Press **Deploy**.
 
 After pushing changes later, restart the app from the **Manage app** menu.
@@ -115,7 +115,7 @@ After pushing changes later, restart the app from the **Manage app** menu.
 | -------------------------- | -------------------------------------------- |
 | The upload box is blank    | Run `npm run build` and upload `build/` again |
 | It says my session expired | Log out and sign in again                    |
-| The time looks wrong       | Make sure you have the latest `Test.py`      |
+| The time looks wrong       | Make sure you have the latest `Lecture_Main.py`      |
 | Changes do not show up     | Restart the app and refresh the page         |
 | A big upload fails         | Check your internet and try again            |
 
