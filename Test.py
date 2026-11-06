@@ -67,6 +67,9 @@ defaults = {
     "pending_cookie": "",       # refresh token waiting to be saved as a cookie
     "clear_cookie": False,
     "bad_cookie": "",
+    "uploaded_file_size": "",   # shown on the dashboard
+    "processed_count": 0,       # lectures processed this session
+    "history": [],              # [{"name", "size", "time"}] for the Recent lectures card
 }
 for key, value in defaults.items():
     if key not in st.session_state:
@@ -773,6 +776,17 @@ button[kind="primaryFormSubmit"] p,
     fill: currentColor !important;
 }
 
+/* ---------- Sidebar brand + nav labels ---------- */
+.side-brand { display: flex; align-items: center; gap: 12px; margin: 4px 0 18px; }
+.brand-logo.sm { width: 42px; height: 42px; border-radius: 13px; box-shadow: 0 0 0 4px var(--glow); }
+.dash-wordmark { font-weight: 800; font-size: 1.35rem; letter-spacing: -0.4px; color: var(--text); line-height: 1.1; }
+.dash-wordmark b { color: var(--accent); font-weight: 800; }
+.side-tag { font-size: 0.72rem; color: var(--muted) !important; margin-top: 2px; }
+.nav-label {
+    font-size: 0.7rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--muted) !important; margin: 18px 0 6px 6px;
+}
+
 /* ---------- Footer ---------- */
 .footer {
     text-align: center;
@@ -899,7 +913,170 @@ def show_footer() -> None:
     )
 
 
-show_background_fx(login=st.session_state.screen == "login")
+# ------------------------------------------------------------
+# Dashboard theme (signed-in screens): deep navy, blue accent, cards with a glowing top edge
+# ------------------------------------------------------------
+DASH_CSS = """
+/* Same violet / pink / cyan palette as the login screen (colour variables come from the base theme) */
+.stApp {
+    background: linear-gradient(125deg, var(--lg1), var(--lg2), var(--lg3), var(--lg4), var(--lg1)) !important;
+    background-size: 300% 300% !important;
+    animation: gradient-shift 26s ease infinite alternate;
+}
+.block-container { max-width: 1280px; padding-top: 1.4rem; }
+
+/* drifting colour orbs + floating shapes (same as login) */
+.lg-orb { position: absolute; border-radius: 50%; filter: blur(70px); opacity: 0.30; }
+.lg-orb-1 { width: 420px; height: 420px; top: -140px; left: -100px;
+            background: radial-gradient(circle, #FF6AC1, transparent 70%); animation: orb-drift 24s ease-in-out infinite alternate; }
+.lg-orb-2 { width: 400px; height: 400px; bottom: -150px; left: 14%;
+            background: radial-gradient(circle, #3EC6FF, transparent 70%); animation: orb-drift-2 30s ease-in-out infinite alternate; }
+.lg-orb-3 { width: 440px; height: 440px; top: 18%; right: -140px;
+            background: radial-gradient(circle, #8B7CFF, transparent 70%); animation: orb-drift 28s ease-in-out infinite alternate-reverse; }
+.lg-shape { position: absolute; opacity: 0.30; animation: shape-float linear infinite; }
+.lg-shape.ring-a { border-radius: 50%; border: 2px solid #8B7CFF; }
+.lg-shape.ring-b { border-radius: 50%; border: 2px solid #FF7AC8; }
+.lg-shape.ring-c { border-radius: 50%; border: 2px solid #3EC6FF; }
+.lg-shape.sq-a { border-radius: 16px; background: linear-gradient(135deg, #8B7CFF, #3EC6FF); opacity: 0.18; }
+.lg-shape.sq-b { border-radius: 12px; background: linear-gradient(135deg, #FF7AC8, #FFB86B); opacity: 0.18; }
+@keyframes gradient-shift { 0% { background-position: 0% 50%; } 100% { background-position: 100% 50%; } }
+@keyframes shape-float {
+    0%   { transform: translateY(0) rotate(0deg); }
+    50%  { transform: translateY(-28px) rotate(180deg); }
+    100% { transform: translateY(0) rotate(360deg); }
+}
+@keyframes dot-pulse { 0%, 100% { box-shadow: 0 0 0 3px var(--glow); } 50% { box-shadow: 0 0 0 7px var(--glow); } }
+@media (prefers-reduced-motion: reduce) { .stApp, .lg-orb, .lg-shape, .step.current .step-dot { animation: none !important; } }
+
+/* sidebar navigation: flat rows, the active page is a solid violet pill */
+[data-testid="stSidebar"] .stButton > button {
+    justify-content: flex-start;
+    text-align: left;
+    background: transparent !important;
+    border: 1px solid transparent !important;
+    box-shadow: none !important;
+    color: var(--muted) !important;
+    padding: 0.65rem 0.9rem;
+    border-radius: 14px !important;
+}
+[data-testid="stSidebar"] .stButton > button > div { justify-content: flex-start; }
+[data-testid="stSidebar"] .stButton > button * { color: inherit !important; }
+[data-testid="stSidebar"] .stButton > button:hover {
+    background: var(--glow) !important;
+    border-color: transparent !important;
+    color: var(--text) !important;
+}
+
+/* top bar + welcome */
+.dash-top { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
+.dash-brand { display: flex; align-items: center; gap: 12px; }
+.dash-user {
+    display: flex; align-items: center; gap: 10px;
+    padding: 6px 18px 6px 6px; border-radius: 999px;
+    background: var(--surface); border: 1px solid var(--accent);
+}
+.dash-user .avatar { width: 38px; height: 38px; font-size: 0.9rem; }
+.u-name { font-weight: 700; font-size: 0.85rem; color: var(--text); line-height: 1.2; }
+.u-role { font-size: 0.72rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dash-welcome { font-size: clamp(1.5rem, 3vw, 2.1rem); font-weight: 700; color: var(--text); margin-top: 10px; }
+.dash-welcome em {
+    font-style: italic;
+    background: linear-gradient(90deg, var(--accent), #FF7AC8);
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent; color: transparent;
+}
+.dash-sub { color: var(--muted); font-size: 0.98rem; margin-top: 2px; }
+
+/* cards: violet -> pink glow along the top edge */
+.dash-card,
+[class*="st-key-card_"] {
+    background: linear-gradient(90deg, transparent 0%, #8B7CFF 30%, #FF7AC8 70%, transparent 100%) top / 100% 2px no-repeat,
+                var(--surface) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 20px !important;
+    box-shadow: var(--tile-shadow), 0 0 40px rgba(139, 124, 255, 0.08) !important;
+}
+.dash-card { padding: 20px 22px; }
+.dash-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin: 18px 0 22px; }
+.dc-title { font-size: 1.02rem; font-weight: 700; color: var(--text); }
+.dc-big { font-size: 2rem; font-weight: 800; color: var(--text); margin-top: 14px; line-height: 1.1; }
+.dc-big.file { font-size: 1.15rem; margin-top: 18px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dc-sub { color: var(--muted); font-size: 0.85rem; margin-top: 8px; }
+.dc-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; flex-wrap: nowrap; }
+.dc-head .dc-title { white-space: nowrap; }
+.dc-chip { white-space: nowrap; font-size: 0.68rem; font-weight: 700; padding: 4px 11px; border-radius: 999px; border: 1px solid var(--accent); color: var(--accent); }
+
+/* study tips: one palette colour each */
+.tip { margin-top: 12px; padding: 14px 16px; border-radius: 14px; }
+.tip.t1 { background: var(--tip1); } .tip.t2 { background: var(--tip2); } .tip.t3 { background: var(--tip3); }
+.tip-t { font-weight: 700; color: var(--tip-text); font-size: 0.98rem; }
+.tip-s { font-size: 0.8rem; color: var(--tip-sub); margin-top: 3px; }
+.fmt { display: inline-block; padding: 5px 12px; margin: 10px 6px 0 0; border-radius: 999px;
+       border: 1px solid var(--border); color: var(--muted); font-size: 0.74rem; font-weight: 700; }
+
+/* pipeline ring + steps */
+.ring-wrap { display: flex; justify-content: center; margin: 16px 0 12px; }
+.ring { width: 132px; height: 132px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+.ring-in { width: 102px; height: 102px; border-radius: 50%; background: var(--surface);
+           display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.ring-pct { font-size: 1.6rem; font-weight: 800; color: var(--text); line-height: 1; }
+.ring-lbl { font-size: 0.7rem; color: var(--muted); margin-top: 4px; }
+.steps { display: flex; flex-direction: column; gap: 10px; }
+.step { display: flex; align-items: center; gap: 10px; font-size: 0.88rem; color: var(--muted); }
+.step-dot { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--seg-off);
+            display: flex; align-items: center; justify-content: center; font-size: 0.68rem; font-weight: 800; color: var(--muted); }
+.step.done { color: var(--text); }
+.step.done .step-dot { background: linear-gradient(135deg, #8B7CFF, #FF7AC8); border-color: transparent; color: #FFFFFF; }
+.step.current { color: var(--text); font-weight: 700; }
+.step.current .step-dot { border-color: var(--accent); color: var(--accent); animation: dot-pulse 2s ease-in-out infinite; }
+
+/* recent lectures, account, results mini stats */
+.row { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 14px; background: var(--surface-2); margin-top: 10px; }
+.row-icon { width: 38px; height: 38px; border-radius: 12px; display: flex; align-items: center; justify-content: center;
+            background: linear-gradient(135deg, #8B7CFF, #6C5CE7); }
+.row-main { flex: 1; min-width: 0; }
+.row-t { font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.row-s { font-size: 0.78rem; color: var(--muted); }
+.row-pill { font-size: 0.7rem; font-weight: 800; padding: 4px 10px; border-radius: 999px; color: var(--good); border: 1px solid var(--border); }
+.empty { color: var(--muted); font-size: 0.9rem; padding: 14px 4px 4px; }
+.acct { display: flex; align-items: center; gap: 12px; margin-top: 14px; min-width: 0; }
+.acct > div:last-child { min-width: 0; }
+.mini-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 12px 0 4px; }
+.mini { padding: 12px 14px; border-radius: 14px; background: var(--surface-2); border: 1px solid var(--border); }
+.mini-v { font-size: 1.25rem; font-weight: 800; color: var(--text); }
+.mini-l { font-size: 0.74rem; color: var(--muted); }
+
+@media (max-width: 900px) { .dash-grid, .mini-grid { grid-template-columns: 1fr; } }
+"""
+
+
+def dashboard_css(dark: bool, active_nav: str) -> str:
+    if dark:
+        v = {
+            "seg-off": "rgba(255, 255, 255, 0.18)",
+            "tip1": "linear-gradient(135deg, #4B35C9, #2E2290)",
+            "tip2": "linear-gradient(135deg, #2563C9, #173E8F)",
+            "tip3": "linear-gradient(135deg, #8B3FC9, #5A2490)",
+            "tip-text": "#FFFFFF", "tip-sub": "#D9D2FF",
+        }
+    else:
+        v = {
+            "seg-off": "rgba(24, 36, 58, 0.16)",
+            "tip1": "linear-gradient(135deg, #E5DCFF, #D3C8FF)",
+            "tip2": "linear-gradient(135deg, #D6EBFF, #C3DEFF)",
+            "tip3": "linear-gradient(135deg, #FFE2F2, #FAD0EA)",
+            "tip-text": "#18243A", "tip-sub": "#4A5578",
+        }
+    root = ":root {" + "".join(f"--{k}: {val};" for k, val in v.items()) + "}"
+    sel = f'[data-testid="stSidebar"] .st-key-{active_nav} .stButton > button'
+    active = (
+        f"{sel}, {sel}:hover {{ background: var(--primary-bg) !important; color: #FFFFFF !important; "
+        f"border-color: transparent !important; box-shadow: var(--primary-shadow) !important; }}"
+    )
+    return f"<style>{root}{DASH_CSS}{active}</style>"
+
+
+show_background_fx(login=True)
 
 # ------------------------------------------------------------
 # "Remember me": keep a refresh token in a cookie and restore the login on the next visit
@@ -951,41 +1128,33 @@ elif st.session_state.user is not None and st.session_state.screen == "login":
 # Sidebar: theme toggle and navigation
 # ------------------------------------------------------------
 with st.sidebar:
-    st.markdown("### 🎓 Lecture AI")
-    st.caption("Smart AI-powered lecture summarizer")
-    st.divider()
+    st.markdown(
+        f'<div class="side-brand"><div class="brand-logo sm">{LOGO_SVG}</div>'
+        '<div><div class="dash-wordmark">Lecture <b>AI</b></div>'
+        '<div class="side-tag">Smart lecture summarizer</div></div></div>',
+        unsafe_allow_html=True,
+    )
 
-    theme_label = "☀️  Switch to light mode" if st.session_state.dark_mode else "🌙  Switch to dark mode"
-    if st.button(theme_label, use_container_width=True, key="theme_button"):
+    if st.session_state.screen != "login":
+        st.markdown('<div class="nav-label">Menu</div>', unsafe_allow_html=True)
+        if st.button("Upload lecture", key="nav_upload", icon=":material/cloud_upload:", use_container_width=True):
+            go("upload")
+        if st.button("Results", key="nav_results", icon=":material/description:", use_container_width=True):
+            go("results" if st.session_state.processed else "upload")
+
+    st.markdown('<div class="nav-label">Preferences</div>', unsafe_allow_html=True)
+    if st.session_state.dark_mode:
+        theme_label, theme_icon = "Switch to light mode", ":material/light_mode:"
+    else:
+        theme_label, theme_icon = "Switch to dark mode", ":material/dark_mode:"
+    if st.button(theme_label, key="theme_button", icon=theme_icon, use_container_width=True):
         st.session_state.dark_mode = not st.session_state.dark_mode
         st.rerun()
 
     if st.session_state.screen != "login":
-        username = st.session_state.username or "Student"
-        initials = "".join(part[0] for part in username.split()[:2]).upper() or "S"
-        st.markdown(
-            f"""
-            <div style="display:flex;align-items:center;gap:14px;margin:18px 0;">
-                <div class="avatar">{initials}</div>
-                <div>
-                    <div style="font-weight:800;color:{TEXT};">{username}</div>
-                    <div style="font-size:0.8rem;color:{MUTED};">Student workspace</div>
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-        st.divider()
-
-        if st.button("📤  Upload lecture", use_container_width=True):
-            go("upload")
-        if st.button("📄  View results", use_container_width=True):
-            go("results" if st.session_state.processed else "upload")
-        if st.button("🚪  Log out", use_container_width=True):
+        if st.button("Log out", key="nav_logout", icon=":material/logout:", use_container_width=True):
             sign_out()
             go("login")
-
-    st.markdown("---")
 
 # ------------------------------------------------------------
 # Login screen
@@ -1392,143 +1561,247 @@ if st.session_state.screen == "login":
 # Main workspace screens
 # ------------------------------------------------------------
 else:
-    show_brand()
-
+    screen = st.session_state.screen
     st.markdown(
-        f"""
-        <div class="hero">
-            <h2>Hello, {st.session_state.username or "Student"} 👋</h2>
-            <p>Upload a lecture recording and turn it into a transcript and concise summary.</p>
-        </div>
-        """,
+        dashboard_css(st.session_state.dark_mode, "nav_results" if screen == "results" else "nav_upload"),
         unsafe_allow_html=True,
     )
 
-    m1, m2, m3 = st.columns(3)
-    for col, label, value in [
-        (m1, "WORKFLOW", "3 simple steps"),
-        (m2, "SUPPORTED INPUTS", "Audio + video"),
-        (m3, "OUTPUT", "Transcript + summary"),
-    ]:
-        with col:
-            st.markdown(
-                f"""
-                <div class="metric-card">
-                    <div class="metric-label">{label}</div>
-                    <div class="metric-value">{value}</div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
+    name = st.session_state.username or "Student"
+    safe_name = html.escape(name)
+    initials = "".join(part[0] for part in name.split()[:2]).upper() or "S"
+    email = html.escape((st.session_state.user or {}).get("email", ""))
+    signed_in_at = html.escape(st.session_state.signed_in_at or "")
 
-    st.write("")
+    st.markdown(
+        f'<div class="dash-top">'
+        f'<div class="dash-brand"><div class="brand-logo sm">{LOGO_SVG}</div>'
+        f'<div class="dash-wordmark">Lecture <b>AI</b></div></div>'
+        f'<div class="dash-user"><div class="avatar">{html.escape(initials)}</div>'
+        f'<div><div class="u-name">{safe_name}</div><div class="u-role">Student workspace</div></div></div>'
+        f'</div>'
+        f'<div class="dash-welcome">Welcome back, <em>{safe_name}</em></div>'
+        f'<div class="dash-sub">Turn your lecture recordings into transcripts and summaries.</div>',
+        unsafe_allow_html=True,
+    )
 
-    # Upload screen
-    if st.session_state.screen == "upload":
-        process_clicked = False
-        with card("upload"):
-            st.markdown('<div class="section-title">📤 Upload your lecture</div>', unsafe_allow_html=True)
-            st.markdown(
-                '<div class="section-subtitle">Choose a recording to prepare it for transcription and summarization.</div>',
-                unsafe_allow_html=True,
-            )
+    # Where the current lecture is in the pipeline
+    if screen == "results" and st.session_state.processed:
+        pct, status, chip_text, ring_caption = 100, "Complete", "Complete", "All done"
+    elif screen == "processing":
+        pct, status, chip_text, ring_caption = 50, "Processing", "Processing", "Working on your lecture"
+    else:
+        pct, status, chip_text, ring_caption = 0, "Waiting for upload", "Waiting", "Upload a recording to begin"
 
-            uploaded_file = st.file_uploader(
-                "Choose an audio or video file",
-                type=["mp3", "wav", "m4a", "mp4", "mkv", "webm", "ogg", "mpeg"],
-                help="Accepts common audio and video file types.",
-            )
+    file_label = html.escape(st.session_state.uploaded_file_name) or "No lecture yet"
+    file_sub = (
+        f"{html.escape(st.session_state.uploaded_file_size)} · {status}"
+        if st.session_state.uploaded_file_name
+        else status
+    )
+    history = st.session_state.history
+    if history:
+        last = history[-1]
+        last_html = (
+            f'<div class="dc-big file">{html.escape(last["name"])}</div>'
+            f'<div class="dc-sub">{html.escape(last["time"])}</div>'
+        )
+    else:
+        last_html = '<div class="dc-big">—</div><div class="dc-sub">Nothing processed yet</div>'
 
-            if uploaded_file is not None:
-                st.success(f"Selected: {uploaded_file.name}")
-                st.caption(f"File size: {uploaded_file.size / (1024 * 1024):.2f} MB")
+    if history:
+        rows_html = "".join(
+            '<div class="row"><div class="row-icon">🎙️</div>'
+            f'<div class="row-main"><div class="row-t">{html.escape(item["name"])}</div>'
+            f'<div class="row-s">{html.escape(item["size"])} · {html.escape(item["time"])}</div></div>'
+            '<span class="row-pill">Complete</span></div>'
+            for item in reversed(history[-5:])
+        )
+    else:
+        rows_html = '<div class="empty">No lectures yet. Upload your first recording and it will show up here.</div>'
 
-            process_clicked = st.button(
-                "✨  Process lecture",
-                type="primary",
-                use_container_width=True,
-                disabled=uploaded_file is None,
-            )
+    main_col, side_col = st.columns([3, 1.15], gap="large")
 
-        if process_clicked and uploaded_file is not None:
-            st.session_state.uploaded_file_name = uploaded_file.name
-            st.session_state.processed = False
-            go("processing")
+    with side_col:
+        st.markdown(
+            '<div class="dash-card" style="margin-top:18px;">'
+            '<div class="dc-head"><div class="dc-title">Lecture pipeline</div>'
+            f'<span class="dc-chip">{chip_text}</span></div>'
+            '<div class="ring-wrap">'
+            f'<div class="ring" style="background: conic-gradient(#8B7CFF 0%, #FF7AC8 {pct}%, var(--seg-off) {pct}%);">'
+            f'<div class="ring-in"><div class="ring-pct">{pct}%</div><div class="ring-lbl">complete</div></div></div></div>'
+            f'<div class="dc-sub" style="text-align:center;margin-top:4px;">{ring_caption}</div></div>'
+            '<div class="dash-card" style="margin-top:16px;">'
+            '<div class="dc-head"><div class="dc-title">Study tips</div><span class="dc-chip">Revision</span></div>'
+            '<div class="tip t1"><div class="tip-t">Review within 24 hours</div>'
+            '<div class="tip-s">Summaries stick best when revisited the next day</div></div>'
+            '<div class="tip t2"><div class="tip-t">Explain it aloud</div>'
+            '<div class="tip-s">Retell each key point in your own words</div></div>'
+            '<div class="tip t3"><div class="tip-t">Mark unfamiliar terms</div>'
+            '<div class="tip-s">Re-read the transcript and look them up</div></div></div>'
+            '<div class="dash-card" style="margin-top:16px;">'
+            '<div class="dc-title">Account</div>'
+            f'<div class="acct"><div class="avatar">{html.escape(initials)}</div>'
+            f'<div><div class="u-name">{safe_name}</div><div class="u-role">{email}</div></div></div>'
+            f'<div class="dc-sub">Signed in {signed_in_at}</div></div>'
+            '<div class="dash-card" style="margin-top:16px;">'
+            '<div class="dc-title">Supported formats</div>'
+            '<div><span class="fmt">MP3</span><span class="fmt">WAV</span><span class="fmt">M4A</span>'
+            '<span class="fmt">MP4</span><span class="fmt">MKV</span><span class="fmt">WEBM</span>'
+            '<span class="fmt">OGG</span></div></div>',
+            unsafe_allow_html=True,
+        )
 
-    # Processing screen
-    elif st.session_state.screen == "processing":
-        with card("processing"):
-            st.markdown('<div class="section-title">⏳ Processing your lecture</div>', unsafe_allow_html=True)
-            st.markdown(
-                f'<div class="section-subtitle">File: {st.session_state.uploaded_file_name or "Your recording"}</div>',
-                unsafe_allow_html=True,
-            )
-            st.write("We extract the audio, transcribe the speech, and write a concise summary of your lecture.")
-            st.progress(0.25, text="Preparing audio")
-            st.progress(0.50, text="Transcribing speech")
-            st.progress(0.75, text="Generating summary")
-            st.progress(1.0, text="Preparing results")
+    with main_col:
+        st.markdown(
+            '<div class="dash-grid">'
+            f'<div class="dash-card"><div class="dc-title">Current lecture</div>'
+            f'<div class="dc-big file">{file_label}</div><div class="dc-sub">{file_sub}</div></div>'
+            f'<div class="dash-card"><div class="dc-title">Lectures processed</div>'
+            f'<div class="dc-big">{int(st.session_state.processed_count)}</div><div class="dc-sub">this session</div></div>'
+            f'<div class="dash-card"><div class="dc-title">Last processed</div>{last_html}</div>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
 
-            if st.button("Show results", type="primary", use_container_width=True):
-                with st.spinner("Preparing results..."):
-                    time.sleep(1.5)
-                st.session_state.processed = True
-                go("results")
-            if st.button("← Back to upload", use_container_width=True):
-                go("upload")
-
-    # Results screen
-    elif st.session_state.screen == "results":
-        if not st.session_state.processed:
-            st.info("There are no completed results yet. Upload a recording to get started.")
-            if st.button("Upload a lecture", use_container_width=True):
-                go("upload")
-        else:
-            transcript = (
-                "Welcome to today's lecture. We will introduce the main topic, define the key concepts, "
-                "and review a few examples. First, focus on understanding the problem. Next, identify the "
-                "important terms and how they relate to each other. Finally, use the examples to test your "
-                "understanding and revise the main points after class."
-            )
-            summary = """## Lecture summary
-
-- **Main idea:** Understand the topic by identifying its core concepts and relationships.
-- **Key points:** Learn the definitions, follow the examples, and connect each concept to the problem being discussed.
-- **Suggested revision:** Review the key terms, then try explaining each example in your own words.
-- **Next step:** Re-read the transcript and note any terms you want to look up."""
-
-            with card("results"):
-                st.markdown('<div class="section-title">✅ Your lecture results</div>', unsafe_allow_html=True)
+        # Upload screen
+        if screen == "upload":
+            process_clicked = False
+            with card("upload"):
+                st.markdown('<div class="section-title">Upload your lecture</div>', unsafe_allow_html=True)
                 st.markdown(
-                    f'<div class="section-subtitle">Results for: {st.session_state.uploaded_file_name}</div>',
+                    '<div class="section-subtitle">Choose a recording to prepare it for transcription and summarization.</div>',
                     unsafe_allow_html=True,
                 )
-                st.markdown('<span class="status-pill">Complete</span>', unsafe_allow_html=True)
-                st.write("")
 
-                tab_summary, tab_transcript = st.tabs(["📝 Summary", "🎙️ Transcript"])
-                with tab_summary:
-                    st.markdown(summary)
-                    st.download_button(
-                        "⬇️ Download summary",
-                        data=summary,
-                        file_name="lecture_summary.md",
-                        mime="text/markdown",
-                        use_container_width=True,
-                    )
-                with tab_transcript:
-                    st.write(transcript)
-                    st.download_button(
-                        "⬇️ Download transcript",
-                        data=transcript,
-                        file_name="lecture_transcript.txt",
-                        mime="text/plain",
-                        use_container_width=True,
-                    )
+                uploaded_file = st.file_uploader(
+                    "Choose an audio or video file",
+                    type=["mp3", "wav", "m4a", "mp4", "mkv", "webm", "ogg", "mpeg"],
+                    help="Accepts common audio and video file types.",
+                )
 
-            if st.button("＋ Process another lecture", use_container_width=True):
+                if uploaded_file is not None:
+                    st.success(f"Selected: {uploaded_file.name}")
+                    st.caption(f"File size: {uploaded_file.size / (1024 * 1024):.2f} MB")
+
+                process_clicked = st.button(
+                    "✨  Process lecture",
+                    type="primary",
+                    use_container_width=True,
+                    disabled=uploaded_file is None,
+                )
+
+            if process_clicked and uploaded_file is not None:
+                st.session_state.uploaded_file_name = uploaded_file.name
+                st.session_state.uploaded_file_size = f"{uploaded_file.size / (1024 * 1024):.2f} MB"
                 st.session_state.processed = False
-                st.session_state.uploaded_file_name = ""
-                go("upload")
+                go("processing")
+
+        # Processing screen
+        elif screen == "processing":
+            with card("processing"):
+                st.markdown('<div class="section-title">Processing your lecture</div>', unsafe_allow_html=True)
+                st.markdown(
+                    f'<div class="section-subtitle">File: {html.escape(st.session_state.uploaded_file_name or "Your recording")}</div>',
+                    unsafe_allow_html=True,
+                )
+                st.write("We extract the audio, transcribe the speech, and write a concise summary of your lecture.")
+                st.progress(0.25, text="Preparing audio")
+                st.progress(0.50, text="Transcribing speech")
+                st.progress(0.75, text="Generating summary")
+                st.progress(1.0, text="Preparing results")
+
+                if st.button("Show results", type="primary", use_container_width=True):
+                    with st.spinner("Preparing results..."):
+                        time.sleep(1.5)
+                    if not st.session_state.processed:
+                        st.session_state.processed_count += 1
+                        st.session_state.history.append(
+                            {
+                                "name": st.session_state.uploaded_file_name or "Lecture",
+                                "size": st.session_state.uploaded_file_size or "",
+                                "time": datetime.now().strftime("%d %b, %I:%M %p"),
+                            }
+                        )
+                    st.session_state.processed = True
+                    go("results")
+                if st.button("← Back to upload", use_container_width=True):
+                    go("upload")
+
+        # Results screen
+        elif screen == "results":
+            if not st.session_state.processed:
+                st.info("There are no completed results yet. Upload a recording to get started.")
+                if st.button("Upload a lecture", use_container_width=True):
+                    go("upload")
+            else:
+                transcript = (
+                    "Welcome to today's lecture. We will introduce the main topic, define the key concepts, "
+                    "and review a few examples. First, focus on understanding the problem. Next, identify the "
+                    "important terms and how they relate to each other. Finally, use the examples to test your "
+                    "understanding and revise the main points after class."
+                )
+                summary_lines = [
+                    "## Lecture summary",
+                    "",
+                    "- **Main idea:** Understand the topic by identifying its core concepts and relationships.",
+                    "- **Key points:** Learn the definitions, follow the examples, and connect each concept to the problem being discussed.",
+                    "- **Suggested revision:** Review the key terms, then try explaining each example in your own words.",
+                    "- **Next step:** Re-read the transcript and note any terms you want to look up.",
+                ]
+                summary = "\n".join(summary_lines)
+                word_count = len(transcript.split())
+                read_minutes = max(1, round(word_count / 200))
+                key_points = sum(1 for line in summary_lines if line.startswith("- "))
+
+                with card("results"):
+                    st.markdown('<div class="section-title">Your lecture results</div>', unsafe_allow_html=True)
+                    st.markdown(
+                        f'<div class="section-subtitle">Results for: {html.escape(st.session_state.uploaded_file_name)}</div>',
+                        unsafe_allow_html=True,
+                    )
+                    st.markdown('<span class="status-pill">Complete</span>', unsafe_allow_html=True)
+                    st.markdown(
+                        '<div class="mini-grid">'
+                        f'<div class="mini"><div class="mini-v">{word_count}</div><div class="mini-l">Transcript words</div></div>'
+                        f'<div class="mini"><div class="mini-v">~{read_minutes} min</div><div class="mini-l">Reading time</div></div>'
+                        f'<div class="mini"><div class="mini-v">{key_points}</div><div class="mini-l">Summary points</div></div>'
+                        '</div>',
+                        unsafe_allow_html=True,
+                    )
+
+                    tab_summary, tab_transcript = st.tabs(["📝 Summary", "🎙️ Transcript"])
+                    with tab_summary:
+                        st.markdown(summary)
+                        st.download_button(
+                            "⬇️ Download summary",
+                            data=summary,
+                            file_name="lecture_summary.md",
+                            mime="text/markdown",
+                            use_container_width=True,
+                        )
+                    with tab_transcript:
+                        st.write(transcript)
+                        st.download_button(
+                            "⬇️ Download transcript",
+                            data=transcript,
+                            file_name="lecture_transcript.txt",
+                            mime="text/plain",
+                            use_container_width=True,
+                        )
+
+                if st.button("＋ Process another lecture", use_container_width=True):
+                    st.session_state.processed = False
+                    st.session_state.uploaded_file_name = ""
+                    st.session_state.uploaded_file_size = ""
+                    go("upload")
+
+        # Recent lectures (this session)
+        st.markdown(
+            '<div class="dash-card" style="margin-top:22px;">'
+            '<div class="dc-head"><div class="dc-title">Recent lectures</div><span class="dc-chip">This session</span></div>'
+            f'{rows_html}</div>',
+            unsafe_allow_html=True,
+        )
 
     show_footer()
