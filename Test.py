@@ -127,6 +127,18 @@ def sb():
         st.session_state.sb_client = create_client(SUPABASE_URL, SUPABASE_KEY)
     return st.session_state.sb_client
 
+def get_supabase_access_token():
+    try:
+        session = sb().auth.get_session()
+
+        if not session:
+            return None
+
+        return session.access_token
+
+    except Exception as e:
+        st.error(f"Could not retrieve your login session: {e}")
+        return None
 
 def friendly_error(error: Exception) -> str:
     msg = str(error).lower()
@@ -1303,37 +1315,6 @@ if st.session_state.screen == "login":
             0%, 100% { box-shadow: 0 0 0 8px var(--p-ring), 0 12px 40px var(--p-glow); }
             50%      { box-shadow: 0 0 0 14px var(--p-ring), 0 12px 58px var(--p-glow); }
         }
-        /* ===== No visible scrollbar on the login page (layout and sizes unchanged) ===== */
-        html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"], section.main {
-            scrollbar-width: none; -ms-overflow-style: none;
-        }
-        html::-webkit-scrollbar, body::-webkit-scrollbar, .stApp::-webkit-scrollbar,
-        [data-testid="stAppViewContainer"]::-webkit-scrollbar, [data-testid="stMain"]::-webkit-scrollbar,
-        section.main::-webkit-scrollbar { display: none; width: 0; height: 0; }
-        /* invisible helper elements (style blocks, background layer) must not add blank rows */
-        .element-container:has(style), [data-testid="stElementContainer"]:has(style) {
-            position: absolute; width: 0; height: 0; margin: 0; padding: 0; overflow: hidden;
-        }
-        .element-container:has(.bg-fx), [data-testid="stElementContainer"]:has(.bg-fx) {
-            position: absolute; width: 0; height: 0; margin: 0; padding: 0;
-        }
-        .footer { display: none; }
-        /* centre the card vertically so the space above and below it is equal */
-        .block-container {
-            padding-top: 1rem !important;
-            padding-bottom: 1rem !important;
-            min-height: 100vh !important;
-            box-sizing: border-box !important;
-            display: flex !important;
-            flex-direction: column !important;
-            justify-content: center !important;
-        }
-        .block-container > [data-testid="stVerticalBlock"] {
-            width: 100%;
-            min-height: calc(100vh - 2rem) !important;
-            justify-content: center !important;
-        }
-
         @media (prefers-reduced-motion: reduce) {
             .stApp, [class*="st-key-card_login"], .login-panel, .login-panel .brand-logo,
             .login-feature, .lg-orb, .lg-shape { animation: none !important; }
@@ -1682,6 +1663,40 @@ else:
             '<span class="fmt">OGG</span></div></div>',
             unsafe_allow_html=True,
         )
+        
+        st.markdown("**Google Drive connection test**")
+
+        if st.button("Connect my Drive folder", use_container_width=True):
+            with st.spinner("Preparing your Google Drive folder..."):
+                try:
+                    access_token = get_supabase_access_token()
+
+                    if not access_token:
+                        st.error("Please sign in again.")
+                    else:
+                        import requests
+
+                        response = requests.post(
+                            "https://albzvykwngawajmsuyxz.supabase.co/functions/v1/google-drive-upload",
+                            headers={
+                                "apikey": SUPABASE_KEY,
+                                "Authorization": f"Bearer {access_token}",
+                                "Content-Type": "application/json",
+                            },
+                            json={"action": "prepare-upload"},
+                            timeout=60,
+                        )
+
+                        if response.ok:
+                            st.success("Google Drive folder created successfully!")
+                        else:
+                            st.error(
+                                f"Drive setup failed ({response.status_code}): "
+                                f"{response.text}"
+                            )
+
+                except Exception as e:
+                    st.error(f"Connection test failed: {e}")
 
     with main_col:
         st.markdown(
