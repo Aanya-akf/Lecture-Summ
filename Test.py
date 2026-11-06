@@ -5,6 +5,16 @@ from datetime import datetime
 from pathlib import Path
 
 import streamlit as st
+import streamlit.components.v1 as components
+
+DRIVE_UPLOADER = components.declare_component(
+    "drive_uploader",
+    path=os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),
+        "drive_uploader",
+        "build"
+    )
+)
 
 # Local development: read SUPABASE_URL / SUPABASE_KEY from a .env file beside this script.
 ENV_PATH = Path(__file__).resolve().parent / ".env"
@@ -70,6 +80,7 @@ defaults = {
     "uploaded_file_size": "",   # shown on the dashboard
     "processed_count": 0,       # lectures processed this session
     "history": [],              # [{"name", "size", "time"}] for the Recent lectures card
+    "history_loaded": False,
 }
 for key, value in defaults.items():
     if key not in st.session_state:
@@ -188,7 +199,32 @@ def sign_out() -> None:
     st.session_state.uploaded_file_name = ""
     st.session_state.auth_mode = "signin"
     st.session_state.clear_cookie = True
+    st.session_state.history = []
+    st.session_state.history_loaded = False
 
+def load_history() -> None:
+    # Recent lectures come from the database, so they survive refresh, logout and new devices.
+    try:
+        rows = (
+            sb().table("lecture_uploads")
+            .select("file_name,size_bytes,created_at")
+            .neq("status", "uploading")      # skip uploads that never finished
+            .order("created_at", desc=True)
+            .limit(5)
+            .execute()
+            .data
+        ) or []
+        st.session_state.history = [
+            {
+                "name": r["file_name"],
+                "size": f"{r['size_bytes'] / (1024 * 1024):.2f} MB",
+                "time": datetime.fromisoformat(r["created_at"][:19]).strftime("%d %b, %I:%M %p"),
+            }
+            for r in reversed(rows)          # oldest -> newest, as the card expects
+        ]
+        st.session_state.history_loaded = True
+    except Exception:
+        pass
 
 # ------------------------------------------------------------
 # Theme tokens (modern AI SaaS look: soft slate page, white cards,
@@ -1008,6 +1044,13 @@ DASH_CSS = """
     border-radius: 20px !important;
     box-shadow: var(--tile-shadow), 0 0 40px rgba(139, 124, 255, 0.08) !important;
 }
+
+/* round the uploader iframe so it sits inside the card like a panel */
+[class*="st-key-card_upload"] iframe {
+    border-radius: 16px;
+    box-shadow: 0 0 0 1px var(--border);
+}
+
 .dash-card { padding: 20px 22px; }
 .dash-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin: 18px 0 22px; }
 .dc-title { font-size: 1.02rem; font-weight: 700; color: var(--text); }
@@ -1611,6 +1654,10 @@ else:
         if st.session_state.uploaded_file_name
         else status
     )
+
+    if st.session_state.user and not st.session_state.history_loaded:
+        load_history()
+
     history = st.session_state.history
     if history:
         last = history[-1]
@@ -1709,39 +1756,47 @@ else:
             '</div>',
             unsafe_allow_html=True,
         )
-
+        
         # Upload screen
         if screen == "upload":
-            process_clicked = False
             with card("upload"):
-                st.markdown('<div class="section-title">Upload your lecture</div>', unsafe_allow_html=True)
-                st.markdown(
-                    '<div class="section-subtitle">Choose a recording to prepare it for transcription and summarization.</div>',
-                    unsafe_allow_html=True,
+                access_token = get_supabase_access_token()
+
+                if not access_token:
+                    st.warning("Your login session has expired. Please sign in again.")
+                else:
+                    upload_result = DRIVE_UPLOADER(
+                    accessToken=access_token,
+                    anonKey=SUPABASE_KEY,
+                    functionUrl=f"{SUPABASE_URL}/functions/v1/google-drive-upload",
+                    theme=dict(
+                        dark=st.session_state.dark_mode,
+                        text=TEXT, muted=MUTED, surface=SURFACE, surface2=SURFACE_2,
+                        accent=ACCENT, accent2=ACCENT_2, border=BORDER, glow=GLOW, good=GOOD,
+                        titleA=TITLE_A, titleB=TITLE_B,
+                        primaryBg=PRIMARY_BG, primaryShadow=PRIMARY_SHADOW,
+                        primaryShadowHover=PRIMARY_SHADOW_HOVER,
+                    ),
+                    key="drive_uploader",
+                    default=None,
                 )
 
-                uploaded_file = st.file_uploader(
-                    "Choose an audio or video file",
-                    type=["mp3", "wav", "m4a", "mp4", "mkv", "webm", "ogg", "mpeg"],
-                    help="Accepts common audio and video file types.",
-                )
+                    if (
+                        isinstance(upload_result, dict)
+                        and upload_result.get("status") == "completed"
+                        and upload_result.get("upload_id")
+                        != st.session_state.get("last_processed_upload_id")
+                    ):
+                        st.session_state.last_processed_upload_id = upload_result["upload_id"]
+                        st.session_state.uploaded_file_name = upload_result["file_name"]
+                        st.session_state.uploaded_file_size = (
+                            f"{upload_result['size_bytes'] / (1024 * 1024):.2f} MB"
+                        )
+                        st.session_state.drive_upload_id = upload_result["upload_id"]
+                        st.session_state.processed = False
+                        st.session_state.history_loaded = False
 
-                if uploaded_file is not None:
-                    st.success(f"Selected: {uploaded_file.name}")
-                    st.caption(f"File size: {uploaded_file.size / (1024 * 1024):.2f} MB")
-
-                process_clicked = st.button(
-                    "✨  Process lecture",
-                    type="primary",
-                    use_container_width=True,
-                    disabled=uploaded_file is None,
-                )
-
-            if process_clicked and uploaded_file is not None:
-                st.session_state.uploaded_file_name = uploaded_file.name
-                st.session_state.uploaded_file_size = f"{uploaded_file.size / (1024 * 1024):.2f} MB"
-                st.session_state.processed = False
-                go("processing")
+                        go("processing")
 
         # Processing screen
         elif screen == "processing":
