@@ -1303,6 +1303,36 @@ if st.session_state.screen == "login":
             0%, 100% { box-shadow: 0 0 0 8px var(--p-ring), 0 12px 40px var(--p-glow); }
             50%      { box-shadow: 0 0 0 14px var(--p-ring), 0 12px 58px var(--p-glow); }
         }
+        /* ===== Compact: fit a laptop browser window without a scrollbar ===== */
+        html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"], section.main {
+            scrollbar-width: none; -ms-overflow-style: none;
+        }
+        html::-webkit-scrollbar, body::-webkit-scrollbar, .stApp::-webkit-scrollbar,
+        [data-testid="stAppViewContainer"]::-webkit-scrollbar, [data-testid="stMain"]::-webkit-scrollbar,
+        section.main::-webkit-scrollbar { display: none; width: 0; height: 0; }
+        .block-container { padding-top: 1.8rem !important; padding-bottom: 0 !important; }
+        /* invisible helper elements (style blocks, background layer) must not add row gaps */
+        .element-container:has(style), [data-testid="stElementContainer"]:has(style) {
+            position: absolute; width: 0; height: 0; margin: 0; padding: 0; overflow: hidden;
+        }
+        .element-container:has(.bg-fx), [data-testid="stElementContainer"]:has(.bg-fx) {
+            position: absolute; width: 0; height: 0; margin: 0; padding: 0;
+        }
+        [class*="st-key-card_login"] [data-testid="stVerticalBlock"] { gap: 0.55rem; }
+        [class*="st-key-card_login"] [data-testid="stColumn"]:last-child { padding: 8px 18px 4px; }
+        .login-panel { padding: 22px 24px !important; }
+        .login-panel .brand { gap: 10px; margin: 0 0 8px; }
+        .login-panel .brand-logo { width: 64px !important; height: 64px !important; border-radius: 20px !important; }
+        .login-panel .brand-title { font-size: 2.1rem; }
+        .login-tagline { margin: 2px 0 12px; font-size: 0.92rem; line-height: 1.45; }
+        .login-features { gap: 8px; margin-bottom: 14px; }
+        .login-feature { padding: 8px 12px; font-size: 0.9rem; }
+        .section-subtitle { margin-bottom: 6px; }
+        .footer { display: none; }
+        @media (max-height: 760px) {
+            .login-tagline, .login-panel .wave-row { display: none; }
+            .login-panel .brand-logo { width: 52px !important; height: 52px !important; }
+        }
         @media (prefers-reduced-motion: reduce) {
             .stApp, [class*="st-key-card_login"], .login-panel, .login-panel .brand-logo,
             .login-feature, .lg-orb, .lg-shape { animation: none !important; }
