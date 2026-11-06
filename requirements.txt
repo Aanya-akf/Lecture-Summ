@@ -3,3 +3,6 @@ extra-streamlit-components>=0.1.71
 supabase>=2.10
 python-dotenv
 streamlit-cookies-controller
+google-api-python-client
+google-auth-httplib2
+google-auth-oauthlib
