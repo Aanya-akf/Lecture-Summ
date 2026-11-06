@@ -1322,11 +1322,16 @@ if st.session_state.screen == "login":
         .block-container {
             padding-top: 1rem !important;
             padding-bottom: 1rem !important;
-            min-height: 100vh;
-            box-sizing: border-box;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
+            min-height: 100vh !important;
+            box-sizing: border-box !important;
+            display: flex !important;
+            flex-direction: column !important;
+            justify-content: center !important;
+        }
+        .block-container > [data-testid="stVerticalBlock"] {
+            width: 100%;
+            min-height: calc(100vh - 2rem) !important;
+            justify-content: center !important;
         }
 
         @media (prefers-reduced-motion: reduce) {
