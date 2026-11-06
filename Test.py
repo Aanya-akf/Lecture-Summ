@@ -1318,6 +1318,16 @@ if st.session_state.screen == "login":
             position: absolute; width: 0; height: 0; margin: 0; padding: 0;
         }
         .footer { display: none; }
+        /* centre the card vertically so the space above and below it is equal */
+        .block-container {
+            padding-top: 1rem !important;
+            padding-bottom: 1rem !important;
+            min-height: 100vh;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
 
         @media (prefers-reduced-motion: reduce) {
             .stApp, [class*="st-key-card_login"], .login-panel, .login-panel .brand-logo,
