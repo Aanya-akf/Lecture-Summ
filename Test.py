@@ -3,6 +3,9 @@ import os
 import time
 from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
+
+IST = ZoneInfo("Asia/Kolkata")
 
 import streamlit as st
 import streamlit.components.v1 as components
@@ -182,7 +185,7 @@ def start_session(session, remember: bool) -> None:
     user = session.user
     st.session_state.user = {"id": user.id, "email": user.email}
     st.session_state.username = display_name(user)
-    st.session_state.signed_in_at = datetime.now().strftime("%d %b %Y, %I:%M %p")
+    st.session_state.signed_in_at = datetime.now(IST).strftime("%d %b %Y, %I:%M %p")
     if remember and CookieController is not None:
         st.session_state.pending_cookie = session.refresh_token
 
@@ -218,7 +221,9 @@ def load_history() -> None:
             {
                 "name": r["file_name"],
                 "size": f"{r['size_bytes'] / (1024 * 1024):.2f} MB",
-                "time": datetime.fromisoformat(r["created_at"][:19]).strftime("%d %b, %I:%M %p"),
+                "time": datetime.fromisoformat(r["created_at"].replace("Z", "+00:00"))
+                            .astimezone(IST)
+                            .strftime("%d %b, %I:%M %p"),
             }
             for r in reversed(rows)          # oldest -> newest, as the card expects
         ]
@@ -1051,11 +1056,14 @@ DASH_CSS = """
     box-shadow: 0 0 0 1px var(--border);
 }
 
-.dash-card { padding: 20px 22px; }
-.dash-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin: 18px 0 22px; }
+.dash-card { padding: 20px 22px; min-width: 0; overflow: hidden; }
+.dash-grid { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 0.8fr) minmax(0, 1.3fr); gap: 16px; margin: 18px 0 22px; }
 .dc-title { font-size: 1.02rem; font-weight: 700; color: var(--text); }
 .dc-big { font-size: 2rem; font-weight: 800; color: var(--text); margin-top: 14px; line-height: 1.1; }
-.dc-big.file { font-size: 1.15rem; margin-top: 18px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dc-big.file { font-size: 1.15rem; margin-top: 18px; white-space: nowrap; overflow-x: auto; overflow-y: hidden; padding-bottom: 4px;
+               scrollbar-width: thin; scrollbar-color: var(--accent) transparent; }
+.dc-big.file::-webkit-scrollbar { height: 4px; }
+.dc-big.file::-webkit-scrollbar-thumb { background: var(--accent); border-radius: 4px; }
 .dc-sub { color: var(--muted); font-size: 0.85rem; margin-top: 8px; }
 .dc-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; flex-wrap: nowrap; }
 .dc-head .dc-title { white-space: nowrap; }
@@ -1096,12 +1104,12 @@ DASH_CSS = """
 .empty { color: var(--muted); font-size: 0.9rem; padding: 14px 4px 4px; }
 .acct { display: flex; align-items: center; gap: 12px; margin-top: 14px; min-width: 0; }
 .acct > div:last-child { min-width: 0; }
-.mini-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 12px 0 4px; }
+.mini-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 12px 0 4px; }
 .mini { padding: 12px 14px; border-radius: 14px; background: var(--surface-2); border: 1px solid var(--border); }
 .mini-v { font-size: 1.25rem; font-weight: 800; color: var(--text); }
 .mini-l { font-size: 0.74rem; color: var(--muted); }
 
-@media (max-width: 900px) { .dash-grid, .mini-grid { grid-template-columns: 1fr; } }
+@media (max-width: 900px) { .dash-grid, .mini-grid { grid-template-columns: minmax(0, 1fr); } }
 """
 
 
@@ -1821,7 +1829,7 @@ else:
                             {
                                 "name": st.session_state.uploaded_file_name or "Lecture",
                                 "size": st.session_state.uploaded_file_size or "",
-                                "time": datetime.now().strftime("%d %b, %I:%M %p"),
+                                "time": datetime.now(IST).strftime("%d %b, %I:%M %p"),
                             }
                         )
                     st.session_state.processed = True
