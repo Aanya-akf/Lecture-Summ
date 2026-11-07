@@ -1154,7 +1154,8 @@ if CookieController is not None:
     except Exception:
         cookies = None
 
-_restored = False
+st.sidebar.caption(f"DEBUG cookie: {'found' if cookies and cookies.get(COOKIE_NAME) else 'none'}")
+
 if cookies is not None:
     try:
         if st.session_state.pending_cookie:
@@ -1170,16 +1171,14 @@ if cookies is not None:
                 try:
                     res = sb().auth.refresh_session(saved)
                     if res and res.session and res.user:
-                        start_session(res.session, remember=True)
-                        _restored = True
+                        start_session(res.session, remember=False)
+                        cookies.set(COOKIE_NAME, res.session.refresh_token, max_age=COOKIE_MAX_AGE)
+                        st.session_state.screen = "upload"
                 except Exception:
                     st.session_state.bad_cookie = saved
                     cookies.remove(COOKIE_NAME)
     except Exception:
         pass
-if _restored:
-    st.session_state.screen = "upload"
-    st.rerun()
 
 # Route guard: the workspace is only for signed-in users
 if st.session_state.user is None and st.session_state.screen != "login":
