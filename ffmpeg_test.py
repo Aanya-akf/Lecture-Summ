@@ -26,4 +26,4 @@ if ffmpeg_path:
         st.error("FFmpeg was found, but could not run.")
 
 else:
-    st.error("FFmpeg is not installed.")git add ffmpeg_test.py
+    st.error("FFmpeg is not installed.")
