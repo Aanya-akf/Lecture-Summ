@@ -3,7 +3,7 @@ import shutil
 import subprocess
 import tempfile
 import os
-from audio_processor import transcribe_audio
+from audio_processor import transcribe_audio, convert_to_wav
 
 st.set_page_config(page_title="FFmpeg Test")
 
@@ -136,26 +136,11 @@ if uploaded_file and ffmpeg_path:
                     with open(input_path, "wb") as file:
                         file.write(uploaded_file.getbuffer())
 
-                    command = [
-                        ffmpeg_path,
-                        "-i", input_path,
-                        "-vn",
-                        "-ac", "1",
-                        "-ar", "16000",
-                        "-y",
-                        output_path
-                    ]
+                   convert_to_wav(input_path, output_path)
 
-                    subprocess.run(
-                        command,
-                        check=True,
-                        capture_output=True,
-                        text=True
-                    )
+                   model = whisper.load_model("tiny")
 
-                    model = whisper.load_model("tiny")
-
-                    transcript = transcribe_audio(output_path, model)
+                   transcript = transcribe_audio(output_path, model)
 
                     st.success("Transcription completed!")
                     st.text_area(
