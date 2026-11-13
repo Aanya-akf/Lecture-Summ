@@ -85,3 +85,14 @@ if uploaded_file and ffmpeg_path:
             except subprocess.CalledProcessError as error:
                 st.error("Audio conversion failed.")
                 st.code(error.stderr)
+
+st.divider()
+st.subheader("Whisper Installation Test")
+
+try:
+    import whisper
+    st.success("Whisper is installed and imported successfully!")
+
+except Exception as error:
+    st.error("Whisper import failed.")
+    st.exception(error)
