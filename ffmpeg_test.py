@@ -96,3 +96,18 @@ try:
 except Exception as error:
     st.error("Whisper import failed.")
     st.exception(error)
+
+st.divider()
+st.subheader("Whisper Model Test")
+
+if st.button("Load Whisper Tiny Model"):
+
+    with st.spinner("Loading Whisper model..."):
+        try:
+            model = whisper.load_model("tiny")
+
+            st.success("Whisper tiny model loaded successfully!")
+
+        except Exception as error:
+            st.error("Whisper model loading failed.")
+            st.exception(error)
