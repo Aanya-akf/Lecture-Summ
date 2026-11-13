@@ -111,3 +111,60 @@ if st.button("Load Whisper Tiny Model"):
         except Exception as error:
             st.error("Whisper model loading failed.")
             st.exception(error)
+
+st.divider()
+st.subheader("Whisper Transcription Test")
+
+if uploaded_file and ffmpeg_path:
+
+    if st.button("Transcribe Audio"):
+
+        with st.spinner("Converting and transcribing audio..."):
+
+            try:
+                with tempfile.TemporaryDirectory() as temp_dir:
+
+                    input_path = os.path.join(
+                        temp_dir, uploaded_file.name
+                    )
+
+                    output_path = os.path.join(
+                        temp_dir, "converted_audio.wav"
+                    )
+
+                    with open(input_path, "wb") as file:
+                        file.write(uploaded_file.getbuffer())
+
+                    command = [
+                        ffmpeg_path,
+                        "-i", input_path,
+                        "-vn",
+                        "-ac", "1",
+                        "-ar", "16000",
+                        "-y",
+                        output_path
+                    ]
+
+                    subprocess.run(
+                        command,
+                        check=True,
+                        capture_output=True,
+                        text=True
+                    )
+
+                    model = whisper.load_model("tiny")
+
+                    result = model.transcribe(output_path)
+
+                    transcript = result["text"]
+
+                    st.success("Transcription completed!")
+                    st.text_area(
+                        "Generated Transcript",
+                        transcript,
+                        height=250
+                    )
+
+            except Exception as error:
+                st.error("Transcription failed.")
+                st.exception(error)
