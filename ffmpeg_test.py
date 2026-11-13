@@ -3,6 +3,7 @@ import shutil
 import subprocess
 import tempfile
 import os
+from audio_processor import transcribe_audio
 
 st.set_page_config(page_title="FFmpeg Test")
 
@@ -154,9 +155,7 @@ if uploaded_file and ffmpeg_path:
 
                     model = whisper.load_model("tiny")
 
-                    result = model.transcribe(output_path)
-
-                    transcript = result["text"]
+                    transcript = transcribe_audio(output_path, model)
 
                     st.success("Transcription completed!")
                     st.text_area(
