@@ -136,13 +136,14 @@ if uploaded_file and ffmpeg_path:
                     with open(input_path, "wb") as file:
                         file.write(uploaded_file.getbuffer())
 
-                   convert_to_wav(input_path, output_path)
+                    convert_to_wav(input_path, output_path)
 
-                   model = whisper.load_model("tiny")
+                    model = whisper.load_model("tiny")
 
-                   transcript = transcribe_audio(output_path, model)
+                    transcript = transcribe_audio(output_path, model)
 
                     st.success("Transcription completed!")
+
                     st.text_area(
                         "Generated Transcript",
                         transcript,
